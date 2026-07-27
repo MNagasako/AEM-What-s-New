@@ -9,7 +9,8 @@ WordPress標準API(`WP_Query` + ショートコードAPI)だけで実装され�
 
 ## 謝辞・経緯
 
-長らく本サイトの新着情報表示を支えてくれた、田中秀樹氏作のWordPressプラグイン
+長らく本サイトの新着情報表示を支えてくれた、Hideki Tanaka氏(WordPress.orgユーザー名:
+`hidakabizplugin`)作のWordPressプラグイン
 「[What's New Generator](https://wordpress.org/plugins/whats-new-genarator/)」
 (スラッグ: `whats-new-genarator`、ショートコード `[showwhatsnew]`)に、
 まずこの場を借りて感謝します。
@@ -45,7 +46,8 @@ WordPress標準API(`WP_Query` + ショートコードAPI)だけで実装され�
 2. 管理画面の「プラグイン」から **AEM What's New** を有効化する
 3. 表示したいページ/投稿に `[aem_whatsnew]` を挿入する
 
-設定画面はありません。表示内容はすべてショートコードの属性で指定します。
+表示内容の既定値は「設定 > AEM What's New」の管理画面で変更できます(プレビュー付き)。
+ショートコード側で属性を明示指定した場合は、そちらが優先されます。
 
 ## 使い方(USAGE)
 

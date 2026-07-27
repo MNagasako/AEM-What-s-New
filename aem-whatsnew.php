@@ -3,7 +3,7 @@
  * Plugin Name: AEM What's New
  * Plugin URI:  https://github.com/MNagasako/AEM-What-s-New
  * Description: 新着情報一覧をWordPress標準API(WP_Query + ショートコードAPI)だけで表示する。外部プラグイン「What's New Generator」の置き換え。
- * Version:     1.0.0
+ * Version:     1.1.0
  * Author:      分析電顕室
  * License:     GPL-2.0-or-later
  * Requires at least: 6.0
@@ -17,10 +17,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 final class AEM_WhatsNew {
 
-	const VERSION           = '1.0.0';
+	const VERSION           = '1.1.0';
 	const SHORTCODE         = 'aem_whatsnew';
 	const LEGACY_SHORTCODE  = 'showwhatsnew';
 	const STYLE_HANDLE      = 'aem-whatsnew';
+	const OPTION_NAME       = 'aem_whatsnew_options';
+	const SETTINGS_GROUP    = 'aem_whatsnew_group';
+	const SETTINGS_SLUG     = 'aem-whatsnew';
 
 	/** 見出しに許可するタグ。これ以外が指定されたら p に落とす。 */
 	const ALLOWED_TITLE_TAGS = array( 'p', 'h2', 'h3', 'h4', 'h5', 'h6', 'div' );
@@ -28,6 +31,10 @@ final class AEM_WhatsNew {
 	public static function boot() {
 		add_action( 'init', array( __CLASS__, 'register_shortcodes' ) );
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'register_style' ) );
+		add_action( 'admin_menu', array( __CLASS__, 'register_settings_page' ) );
+		add_action( 'admin_init', array( __CLASS__, 'register_settings' ) );
+		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'admin_enqueue_style' ) );
+		add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), array( __CLASS__, 'add_settings_link' ) );
 	}
 
 	/**
@@ -64,11 +71,11 @@ final class AEM_WhatsNew {
 	}
 
 	/**
-	 * ショートコードの既定値。
+	 * ショートコードのハード既定値(設定画面が未保存の場合のフォールバック)。
 	 *
 	 * 旧プラグインのwhats_new_options(移行時点の本番値)と同じ表示になるようにしてある。
 	 */
-	private static function defaults() {
+	private static function hard_defaults() {
 		return array(
 			'title'            => '新着情報',
 			'title_tag'        => 'p',
@@ -83,6 +90,268 @@ final class AEM_WhatsNew {
 			'date_format'      => '',                // 空=「設定 > 一般」の日付フォーマット
 			'empty_text'       => '現在、新着情報はありません。',
 		);
+	}
+
+	/**
+	 * ショートコードの既定値。
+	 *
+	 * 設定画面(「設定 > AEM What's New」)で保存された値をハード既定値の上に重ねたもの。
+	 * ショートコード側で属性を明示指定した場合は、shortcode_atts()の仕様によりこちらではなく
+	 * 明示指定された値が使われる(= ショートコード属性が最優先)。
+	 */
+	private static function defaults() {
+		$saved = get_option( self::OPTION_NAME, array() );
+
+		return wp_parse_args( is_array( $saved ) ? $saved : array(), self::hard_defaults() );
+	}
+
+	/**
+	 * 設定画面で編集可能なフィールドの定義。
+	 */
+	private static function fields() {
+		return array(
+			'title'            => array(
+				'type'  => 'text',
+				'label' => '見出しテキスト',
+				'desc'  => '空にすると見出しを表示しない',
+			),
+			'title_tag'        => array(
+				'type'    => 'select',
+				'label'   => '見出しタグ',
+				'choices' => array_combine( self::ALLOWED_TITLE_TAGS, self::ALLOWED_TITLE_TAGS ),
+			),
+			'post_type'        => array(
+				'type'  => 'text',
+				'label' => '対象投稿タイプ',
+				'desc'  => 'カンマ区切り(例: post,page)。公開状態の投稿タイプのみ有効',
+			),
+			'number'           => array(
+				'type'  => 'number',
+				'label' => '表示件数',
+				'min'   => 1,
+				'max'   => 50,
+			),
+			'orderby'          => array(
+				'type'    => 'select',
+				'label'   => '並び順',
+				'choices' => array(
+					'date'     => '投稿日',
+					'modified' => '更新日',
+				),
+			),
+			'category'         => array(
+				'type'  => 'text',
+				'label' => '対象カテゴリ',
+				'desc'  => 'スラッグ/カテゴリ名/IDをカンマ区切りで指定。空で全カテゴリ',
+			),
+			'exclude_category' => array(
+				'type'  => 'text',
+				'label' => '除外カテゴリ',
+				'desc'  => 'スラッグ/カテゴリ名/IDをカンマ区切りで指定',
+			),
+			'exclude_ids'      => array(
+				'type'  => 'text',
+				'label' => '個別除外ID',
+				'desc'  => '投稿ID/固定ページIDをカンマ区切りで指定',
+			),
+			'newmark_days'     => array(
+				'type'  => 'number',
+				'label' => 'NEW!表示日数',
+				'min'   => 0,
+				'max'   => 3650,
+				'desc'  => '0でNEW!マークを無効化',
+			),
+			'newmark_latest'   => array(
+				'type'  => 'checkbox',
+				'label' => '最新1件に常にNEW!を付ける',
+			),
+			'date_format'      => array(
+				'type'  => 'text',
+				'label' => '日付フォーマット',
+				'desc'  => '空欄で「設定 > 一般」の日付形式を使用(PHPのdate()書式)',
+			),
+			'empty_text'       => array(
+				'type'  => 'text',
+				'label' => '0件時の表示文言',
+				'desc'  => '空にすると非表示',
+			),
+		);
+	}
+
+	/**
+	 * 設定画面を「設定」メニュー配下に登録する。
+	 */
+	public static function register_settings_page() {
+		add_options_page(
+			"AEM What's New",
+			"AEM What's New",
+			'manage_options',
+			self::SETTINGS_SLUG,
+			array( __CLASS__, 'render_settings_page' )
+		);
+	}
+
+	/**
+	 * Settings APIに設定項目を登録する。
+	 */
+	public static function register_settings() {
+		register_setting(
+			self::SETTINGS_GROUP,
+			self::OPTION_NAME,
+			array(
+				'type'              => 'array',
+				'sanitize_callback' => array( __CLASS__, 'sanitize_options' ),
+				'default'           => self::hard_defaults(),
+			)
+		);
+	}
+
+	/**
+	 * 設定画面でだけ、プレビュー表示用のCSSを読み込む。
+	 */
+	public static function admin_enqueue_style( $hook_suffix ) {
+		if ( 'settings_page_' . self::SETTINGS_SLUG !== $hook_suffix ) {
+			return;
+		}
+
+		wp_register_style(
+			self::STYLE_HANDLE,
+			plugins_url( 'aem-whatsnew.css', __FILE__ ),
+			array(),
+			self::VERSION
+		);
+		wp_enqueue_style( self::STYLE_HANDLE );
+	}
+
+	/**
+	 * プラグイン一覧に「設定」リンクを追加する。
+	 */
+	public static function add_settings_link( $links ) {
+		$url = admin_url( 'options-general.php?page=' . self::SETTINGS_SLUG );
+		array_unshift( $links, '<a href="' . esc_url( $url ) . '">設定</a>' );
+
+		return $links;
+	}
+
+	/**
+	 * 保存前のサニタイズ。値の正規化(カテゴリ解決等)はrender()側でまとめて行うため、
+	 * ここでは型・範囲のチェックのみ行う。
+	 */
+	public static function sanitize_options( $input ) {
+		$input = is_array( $input ) ? $input : array();
+		$out   = array();
+
+		$out['title']            = isset( $input['title'] ) ? sanitize_text_field( $input['title'] ) : '';
+		$out['title_tag']        = in_array( $input['title_tag'] ?? '', self::ALLOWED_TITLE_TAGS, true ) ? $input['title_tag'] : 'p';
+		$out['post_type']        = isset( $input['post_type'] ) ? sanitize_text_field( $input['post_type'] ) : 'post,page';
+		$out['number']           = (string) min( 50, max( 1, absint( $input['number'] ?? 10 ) ) );
+		$out['orderby']          = ( isset( $input['orderby'] ) && 'modified' === $input['orderby'] ) ? 'modified' : 'date';
+		$out['category']         = isset( $input['category'] ) ? sanitize_text_field( $input['category'] ) : '';
+		$out['exclude_category'] = isset( $input['exclude_category'] ) ? sanitize_text_field( $input['exclude_category'] ) : '';
+		$out['exclude_ids']      = isset( $input['exclude_ids'] ) ? sanitize_text_field( $input['exclude_ids'] ) : '';
+		$out['newmark_days']     = (string) max( 0, absint( $input['newmark_days'] ?? 30 ) );
+		$out['newmark_latest']   = ! empty( $input['newmark_latest'] ) ? 'yes' : 'no';
+		$out['date_format']      = isset( $input['date_format'] ) ? sanitize_text_field( $input['date_format'] ) : '';
+		$out['empty_text']       = isset( $input['empty_text'] ) ? sanitize_text_field( $input['empty_text'] ) : '';
+
+		return $out;
+	}
+
+	/**
+	 * 設定画面を出力する。オリジナル「What's New Generator」にあったプレビュー機能も再現し、
+	 * 保存済み設定での表示結果をその場で確認できるようにしてある。
+	 */
+	public static function render_settings_page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		$options = self::defaults();
+		?>
+<div class="wrap">
+	<h1>AEM What's New — 設定</h1>
+	<p>
+		ここで指定した値は、ショートコード <code>[aem_whatsnew]</code> / <code>[showwhatsnew]</code> の既定値になります。
+		ショートコード側で属性を明示指定した場合は、そちらが優先されます。
+	</p>
+	<form method="post" action="options.php">
+		<?php settings_fields( self::SETTINGS_GROUP ); ?>
+		<table class="form-table" role="presentation">
+			<?php foreach ( self::fields() as $key => $field ) : ?>
+			<tr>
+				<th scope="row">
+					<label for="aem-whatsnew-<?php echo esc_attr( $key ); ?>"><?php echo esc_html( $field['label'] ); ?></label>
+				</th>
+				<td>
+					<?php self::render_field( $key, $field, $options[ $key ] ?? '' ); ?>
+					<?php if ( ! empty( $field['desc'] ) ) : ?>
+					<p class="description"><?php echo esc_html( $field['desc'] ); ?></p>
+					<?php endif; ?>
+				</td>
+			</tr>
+			<?php endforeach; ?>
+		</table>
+		<?php submit_button(); ?>
+	</form>
+
+	<h2>プレビュー</h2>
+	<p class="description">現在保存されている設定で <code>[aem_whatsnew]</code> を表示した場合の見た目です。</p>
+	<div style="max-width:480px;border:1px solid #ccd0d4;padding:12px;background:#fff;">
+		<?php echo self::render( array() ); // phpcs:ignore WordPress.Security.EscapeOutput -- render()内でエスケープ済み ?>
+	</div>
+</div>
+		<?php
+	}
+
+	/**
+	 * 設定画面の1フィールド分の入力欄を出力する。
+	 */
+	private static function render_field( $key, array $field, $value ) {
+		$id   = 'aem-whatsnew-' . $key;
+		$name = self::OPTION_NAME . '[' . $key . ']';
+
+		switch ( $field['type'] ) {
+			case 'select':
+				echo '<select id="' . esc_attr( $id ) . '" name="' . esc_attr( $name ) . '">';
+				foreach ( $field['choices'] as $choice_value => $choice_label ) {
+					printf(
+						'<option value="%s"%s>%s</option>',
+						esc_attr( $choice_value ),
+						selected( $value, $choice_value, false ),
+						esc_html( $choice_label )
+					);
+				}
+				echo '</select>';
+				break;
+
+			case 'checkbox':
+				printf(
+					'<label><input type="checkbox" id="%1$s" name="%2$s" value="1"%3$s /> 有効にする</label>',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					checked( 'yes', $value, false )
+				);
+				break;
+
+			case 'number':
+				printf(
+					'<input type="number" id="%1$s" name="%2$s" value="%3$s" min="%4$s" max="%5$s" class="small-text" />',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_attr( $value ),
+					esc_attr( $field['min'] ?? 0 ),
+					esc_attr( $field['max'] ?? 9999 )
+				);
+				break;
+
+			default:
+				printf(
+					'<input type="text" id="%1$s" name="%2$s" value="%3$s" class="regular-text" />',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_attr( $value )
+				);
+		}
 	}
 
 	public static function render( $atts = array() ) {

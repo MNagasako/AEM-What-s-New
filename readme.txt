@@ -4,7 +4,7 @@ Tags: shortcode, whats-new, news, recent-posts, category
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -23,8 +23,9 @@ License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 = 謝辞・経緯 =
 
-長らく運用していた、田中秀樹氏作のWordPressプラグイン「What's New Generator」
-(WordPress.org スラッグ: `whats-new-genarator`)に感謝します。同プラグインはWordPress.org
+長らく運用していた、Hideki Tanaka氏(WordPress.orgユーザー名: `hidakabizplugin`)作の
+WordPressプラグイン「What's New Generator」(WordPress.org スラッグ: `whats-new-genarator`)
+に感謝します。同プラグインはWordPress.org
 公式ディレクトリで配布されていましたが、2024年6月15日付で「セキュリティ上の問題」を理由に
 公開停止となりダウンロードできなくなりました(最終版は v2.0.2)。ソースコードや仕様の情報を
 改めて入手できなかったため、本番サイトでの出力・挙動の観察をもとに、WordPress標準APIのみで
@@ -36,7 +37,8 @@ License URI: https://www.gnu.org/licenses/gpl-2.0.html
 2. 管理画面の「プラグイン」から有効化する。
 3. 表示したいページ/投稿に `[aem_whatsnew]` を挿入する。
 
-設定画面はありません。表示内容はすべてショートコードの属性で指定します。
+表示内容の既定値は「設定 > AEM What's New」の管理画面で変更できます(プレビュー付き)。
+ショートコード側で属性を明示指定した場合は、そちらが優先されます。
 
 == Frequently Asked Questions ==
 
@@ -54,10 +56,16 @@ License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 == Changelog ==
 
+= 1.1.0 =
+* 管理画面(設定 > AEM What's New)を追加。プレビュー付きでショートコードの既定値を編集できるようになった。ショートコード属性を明示指定した場合はそちらが優先される。
+
 = 1.0.0 =
 * 初版。外部プラグイン「What's New Generator」の置き換えとして、東北大学金研分析電顕室サイトで運用してきたものをリポジトリ化。
 
 == Upgrade Notice ==
+
+= 1.1.0 =
+管理画面(設定 > AEM What's New)を追加。既存のショートコード運用に影響なし。
 
 = 1.0.0 =
 初版リリース。
