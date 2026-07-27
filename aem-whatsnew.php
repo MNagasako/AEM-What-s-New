@@ -3,7 +3,7 @@
  * Plugin Name: AEM What's New
  * Plugin URI:  https://github.com/MNagasako/AEM-What-s-New
  * Description: 新着情報一覧をWordPress標準API(WP_Query + ショートコードAPI)だけで表示する。外部プラグイン「What's New Generator」の置き換え。
- * Version:     1.4.0
+ * Version:     1.5.0
  * Author:      分析電顕室
  * License:     GPL-2.0-or-later
  * Requires at least: 6.0
@@ -17,13 +17,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 final class AEM_WhatsNew {
 
-	const VERSION           = '1.4.0';
+	const VERSION           = '1.5.0';
 	const SHORTCODE         = 'aem_whatsnew';
 	const LEGACY_SHORTCODE  = 'showwhatsnew';
 	const STYLE_HANDLE      = 'aem-whatsnew';
 	const OPTION_NAME       = 'aem_whatsnew_options';
 	const SETTINGS_GROUP    = 'aem_whatsnew_group';
 	const SETTINGS_SLUG     = 'aem-whatsnew';
+	const SCRIPT_HANDLE     = 'aem-whatsnew';
+	const AJAX_ACTION       = 'aem_whatsnew_paginate';
 	/** ページネーション有効時に使うURLクエリ引数名。WPの`paged`は既存のアーカイブ/投稿ページ分割と衝突するため専用の名前にしてある。 */
 	const PAGE_QUERY_VAR    = 'whatsnew_page';
 
@@ -37,6 +39,10 @@ final class AEM_WhatsNew {
 		add_action( 'admin_init', array( __CLASS__, 'register_settings' ) );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'admin_enqueue_style' ) );
 		add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), array( __CLASS__, 'add_settings_link' ) );
+		// ページネーション(pagination_mode="async")用。読み取り専用の公開データしか返さないため、
+		// ログイン有無に関わらず同じハンドラで応答する(wp_ajax_ / wp_ajax_nopriv_ 両方に登録)。
+		add_action( 'wp_ajax_' . self::AJAX_ACTION, array( __CLASS__, 'ajax_paginate' ) );
+		add_action( 'wp_ajax_nopriv_' . self::AJAX_ACTION, array( __CLASS__, 'ajax_paginate' ) );
 	}
 
 	/**
@@ -65,6 +71,8 @@ final class AEM_WhatsNew {
 		// render()側(the_content内、wp_head以降に実行される)ではなくここで呼んでおく。
 		self::ensure_custom_css();
 
+		self::register_pagination_script();
+
 		// 本文にショートコードがあるページでだけ読み込む(<head>に入れてFOUCを避ける)。
 		// テンプレート直書き等でrender()が直接呼ばれた場合はrender()側でenqueueする。
 		$post = get_post();
@@ -72,7 +80,31 @@ final class AEM_WhatsNew {
 			&& ( has_shortcode( $post->post_content, self::SHORTCODE )
 				|| has_shortcode( $post->post_content, self::LEGACY_SHORTCODE ) ) ) {
 			wp_enqueue_style( self::STYLE_HANDLE );
+			wp_enqueue_script( self::SCRIPT_HANDLE );
 		}
+	}
+
+	/**
+	 * 非同期ページネーション用スクリプトの登録(まだショートコード有無に関わらず毎回呼んでよい。
+	 * 実際に読み込まれるのは有効化された場合のみ)。
+	 */
+	private static function register_pagination_script() {
+		wp_register_script(
+			self::SCRIPT_HANDLE,
+			plugins_url( 'aem-whatsnew.js', __FILE__ ),
+			array(),
+			self::VERSION,
+			true
+		);
+		wp_localize_script(
+			self::SCRIPT_HANDLE,
+			'AEMWhatsNew',
+			array(
+				'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
+				'action'    => self::AJAX_ACTION,
+				'pageParam' => self::PAGE_QUERY_VAR,
+			)
+		);
 	}
 
 	/**
@@ -103,6 +135,12 @@ final class AEM_WhatsNew {
 			'custom_css'       => '',                // 設定画面のみで編集。ショートコード属性としては扱わない
 			'ui_language'      => 'auto',             // auto | ja | en (管理画面表示と上記既定文言に使う)
 			'pagination'       => 'no',               // ページネーション(?whatsnew_page=N)を有効にするか
+			'pagination_mode'  => 'sync',              // sync(通常のリンク遷移) | async(Ajaxでその場更新)
+			'pagination_style' => 'numbers',           // numbers | prev_next | load_more
+			'pagination_position' => 'bottom_left',   // bottom_left | bottom_right | top_right(見出しの右端)
+			'pagination_max_items' => '0',            // ページネーションで辿れる総件数の上限(0で上限なし)
+			'date_from'        => '',                // 対象期間の開始日(Y-m-d、空で無指定)
+			'date_to'          => '',                // 対象期間の終了日(Y-m-d、空で無指定)
 		);
 	}
 
@@ -169,11 +207,11 @@ final class AEM_WhatsNew {
 				'label_newmark_text'     => 'NEW!マークの文字列',
 				'desc_newmark_text'      => '空にするとマーク自体を表示しない',
 				'label_date_format'      => '日付フォーマット',
-				'desc_date_format'       => '空欄で「設定 > 一般」の日付形式を使用(PHPのdate()書式)',
+				'desc_date_format'       => '空欄で「設定 > 一般」の日付形式を使用(PHPのdate()書式)。特別な値 wareki を指定すると「令和7年7月27日」のような和暦表示になる(明治以降の元号に対応)',
 				'label_empty_text'       => '0件時の表示文言',
 				'desc_empty_text'        => '空にすると非表示',
 				'label_custom_css'       => 'カスタムCSS',
-				'desc_custom_css'        => '同梱の aem-whatsnew.css に追加で読み込まれる。NEW!マークや日付/タイトル/カテゴリ/タイプの並び方など、見た目全般をここで上書きできる(対象クラス: .whatsnew, .whatsnew-title, .whatsnew-item, .whatsnew-row, .newmark, .whatsnew-type, .whatsnew-category, .whatsnew-pagination 等)',
+				'desc_custom_css'        => '同梱の aem-whatsnew.css に追加で読み込まれる。NEW!マークや日付/タイトル/カテゴリ/タイプの並び方など、見た目全般をここで上書きできる(対象クラス: .whatsnew, .whatsnew-title, .whatsnew-item, .whatsnew-row, .whatsnew-header, .newmark, .whatsnew-type, .whatsnew-category, .whatsnew-pagination 等)',
 				'label_ui_language'      => '管理画面・既定文言の表示言語',
 				'desc_ui_language'       => '「自動」はサイトの言語設定(ja/それ以外)に追従する',
 				'choice_lang_auto'       => '自動(サイトの言語設定に従う)',
@@ -181,6 +219,29 @@ final class AEM_WhatsNew {
 				'choice_lang_en'         => 'English',
 				'label_pagination'       => 'ページネーションを有効にする',
 				'desc_pagination'        => '有効にすると「表示件数」が1ページあたりの件数になり、URLに ?whatsnew_page=2 のように付けてページを切り替えられる(同一ページに複数配置している場合、ページ番号はすべての配置で共有される)',
+				'label_pagination_mode'  => 'ページ切り替えの方式',
+				'desc_pagination_mode'   => '「非同期」はJavaScriptでその場更新(ページ全体の再読み込みなし)、「同期」は通常のリンク遷移',
+				'choice_pagination_mode_sync'  => '同期(通常のリンク遷移)',
+				'choice_pagination_mode_async' => '非同期(Ajaxでその場更新)',
+				'label_pagination_style' => 'ページネーションのスタイル',
+				'desc_pagination_style'  => '「もっと見る」を選ぶと、次ページの内容がそれまでの一覧に積み増しされる(同期方式でも動作するが、非同期方式と組み合わせるのが自然)',
+				'choice_style_numbers'   => '番号付き(既定)',
+				'choice_style_prev_next' => '前へ/次へのみ',
+				'choice_style_load_more' => 'もっと見るボタン',
+				'label_pagination_position' => 'ページネーションの表示位置',
+				'desc_pagination_position'  => '「見出しの右端」は一覧の下ではなく、見出し(新着情報等)と同じ行の右端に表示する',
+				'choice_position_bottom_left'  => '下・左寄せ(既定、一覧の下)',
+				'choice_position_bottom_right' => '下・右寄せ(一覧の下)',
+				'choice_position_top_right'    => '見出しの右端(一覧の上)',
+				'label_pagination_max_items' => 'ページネーションの件数上限',
+				'desc_pagination_max_items'  => 'ページ送りで辿れる総件数の上限。0で上限なし(例: 表示件数10・上限50なら最大5ページまで)',
+				'label_date_from'        => '対象期間(開始日)',
+				'desc_date_from'         => 'この日付以降の投稿のみを対象にする(投稿日/更新日は「並び順」の設定に従う)。空欄で無指定',
+				'label_date_to'          => '対象期間(終了日)',
+				'desc_date_to'           => 'この日付以前の投稿のみを対象にする。空欄で無指定',
+				'load_more_text'         => 'もっと見る',
+				'pagination_prev'        => '前へ',
+				'pagination_next'        => '次へ',
 				'default_title'          => '新着情報',
 				'default_newmark_text'   => 'NEW!',
 				'default_empty_text'     => '現在、新着情報はありません。',
@@ -223,11 +284,11 @@ final class AEM_WhatsNew {
 				'label_newmark_text'     => '"NEW!" mark text',
 				'desc_newmark_text'      => 'Leave empty to hide the mark entirely',
 				'label_date_format'      => 'Date format',
-				'desc_date_format'       => "Leave empty to use the site's Settings > General date format (PHP date() syntax)",
+				'desc_date_format'       => "Leave empty to use the site's Settings > General date format (PHP date() syntax). The special value \"wareki\" renders the Japanese era calendar instead (e.g. \"令和7年7月27日\"), supporting all eras from Meiji onward",
 				'label_empty_text'       => 'Empty-state text',
 				'desc_empty_text'        => 'Shown when there are no matching items. Leave empty to hide',
 				'label_custom_css'       => 'Custom CSS',
-				'desc_custom_css'        => 'Loaded in addition to the bundled aem-whatsnew.css. Use it to restyle anything, including the "NEW!" mark and the list layout (relevant classes: .whatsnew, .whatsnew-title, .whatsnew-item, .whatsnew-row, .newmark, .whatsnew-type, .whatsnew-category, .whatsnew-pagination, etc.)',
+				'desc_custom_css'        => 'Loaded in addition to the bundled aem-whatsnew.css. Use it to restyle anything, including the "NEW!" mark and the list layout (relevant classes: .whatsnew, .whatsnew-title, .whatsnew-item, .whatsnew-row, .whatsnew-header, .newmark, .whatsnew-type, .whatsnew-category, .whatsnew-pagination, etc.)',
 				'label_ui_language'      => 'Admin screen & default text language',
 				'desc_ui_language'       => '"Auto" follows the site\'s language setting (Japanese vs. everything else)',
 				'choice_lang_auto'       => 'Auto (follow site language)',
@@ -235,6 +296,29 @@ final class AEM_WhatsNew {
 				'choice_lang_en'         => 'English',
 				'label_pagination'       => 'Enable pagination',
 				'desc_pagination'        => 'When enabled, "Number of items" becomes the per-page count, and the list can be paged via ?whatsnew_page=2 in the URL (the page number is shared across all instances if you place the shortcode more than once on the same page)',
+				'label_pagination_mode'  => 'Pagination mode',
+				'desc_pagination_mode'   => '"Async" updates the list in place via JavaScript (no full page reload); "Sync" is a normal link navigation',
+				'choice_pagination_mode_sync'  => 'Sync (normal link navigation)',
+				'choice_pagination_mode_async' => 'Async (in-place update via Ajax)',
+				'label_pagination_style' => 'Pagination style',
+				'desc_pagination_style'  => '"Load more" appends the next page\'s items to the existing list (works in sync mode too, but pairs most naturally with async)',
+				'choice_style_numbers'   => 'Numbered (default)',
+				'choice_style_prev_next' => 'Prev/Next only',
+				'choice_style_load_more' => '"Load more" button',
+				'label_pagination_position' => 'Pagination position',
+				'desc_pagination_position'  => '"Top-right (next to heading)" places it on the same row as the heading (e.g. "What\'s New") instead of below the list',
+				'choice_position_bottom_left'  => 'Bottom-left (default, below the list)',
+				'choice_position_bottom_right' => 'Bottom-right (below the list)',
+				'choice_position_top_right'    => 'Top-right (next to the heading)',
+				'label_pagination_max_items' => 'Pagination item cap',
+				'desc_pagination_max_items'  => 'Maximum total items reachable via pagination. 0 = no limit (e.g. 10 per page with a cap of 50 allows at most 5 pages)',
+				'label_date_from'        => 'Date range (from)',
+				'desc_date_from'         => 'Only include items on or after this date (publish date or modified date, matching the "Order by" setting). Leave empty for no lower bound',
+				'label_date_to'          => 'Date range (to)',
+				'desc_date_to'           => 'Only include items on or before this date. Leave empty for no upper bound',
+				'load_more_text'         => 'Load more',
+				'pagination_prev'        => 'Prev',
+				'pagination_next'        => 'Next',
 				'default_title'          => 'What\'s New',
 				'default_newmark_text'   => 'NEW!',
 				'default_empty_text'     => 'No new updates at this time.',
@@ -306,6 +390,52 @@ final class AEM_WhatsNew {
 				'type'  => 'checkbox',
 				'label' => self::t( 'label_pagination' ),
 				'desc'  => self::t( 'desc_pagination' ),
+			),
+			'pagination_mode'  => array(
+				'type'    => 'select',
+				'label'   => self::t( 'label_pagination_mode' ),
+				'desc'    => self::t( 'desc_pagination_mode' ),
+				'choices' => array(
+					'sync'  => self::t( 'choice_pagination_mode_sync' ),
+					'async' => self::t( 'choice_pagination_mode_async' ),
+				),
+			),
+			'pagination_style' => array(
+				'type'    => 'select',
+				'label'   => self::t( 'label_pagination_style' ),
+				'desc'    => self::t( 'desc_pagination_style' ),
+				'choices' => array(
+					'numbers'   => self::t( 'choice_style_numbers' ),
+					'prev_next' => self::t( 'choice_style_prev_next' ),
+					'load_more' => self::t( 'choice_style_load_more' ),
+				),
+			),
+			'pagination_position' => array(
+				'type'    => 'select',
+				'label'   => self::t( 'label_pagination_position' ),
+				'desc'    => self::t( 'desc_pagination_position' ),
+				'choices' => array(
+					'bottom_left'  => self::t( 'choice_position_bottom_left' ),
+					'bottom_right' => self::t( 'choice_position_bottom_right' ),
+					'top_right'    => self::t( 'choice_position_top_right' ),
+				),
+			),
+			'pagination_max_items' => array(
+				'type'  => 'number',
+				'label' => self::t( 'label_pagination_max_items' ),
+				'min'   => 0,
+				'max'   => 500,
+				'desc'  => self::t( 'desc_pagination_max_items' ),
+			),
+			'date_from'        => array(
+				'type'  => 'date',
+				'label' => self::t( 'label_date_from' ),
+				'desc'  => self::t( 'desc_date_from' ),
+			),
+			'date_to'          => array(
+				'type'  => 'date',
+				'label' => self::t( 'label_date_to' ),
+				'desc'  => self::t( 'desc_date_to' ),
 			),
 			'orderby'          => array(
 				'type'    => 'select',
@@ -451,6 +581,30 @@ final class AEM_WhatsNew {
 	}
 
 	/**
+	 * 非同期ページネーション(pagination_mode="async")用のAjaxハンドラ。
+	 *
+	 * 公開済み投稿(post_status=publish)のみを返す読み取り専用のエンドポイントで、状態変更を
+	 * 一切行わない。閲覧できる内容は通常のショートコード表示(?whatsnew_page=N付きURL)で
+	 * 誰でも同じものを見られるため、CSRF対策のnonceは要求していない
+	 * (nonceを必須にすると、ページキャッシュ済みHTML内のnonceがキャッシュ有効期間中に
+	 * 期限切れになりAjaxが失敗し続ける、という別の不具合を生みやすいため)。
+	 * 送信された$attsはrender()内部のshortcode_atts()・各種min/max制限を必ず経由するため、
+	 * クライアントから任意の値を渡されても安全側に丸められる。
+	 */
+	public static function ajax_paginate() {
+		$atts = array();
+		if ( isset( $_POST['atts'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用・公開データのみ返すため上記コメントの理由でnonce必須にしていない
+			$decoded = json_decode( (string) wp_unslash( $_POST['atts'] ), true );
+			if ( is_array( $decoded ) ) {
+				$atts = $decoded;
+			}
+		}
+		$page = isset( $_POST['page'] ) ? absint( $_POST['page'] ) : 1; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+
+		wp_send_json_success( array( 'html' => self::render( $atts, max( 1, $page ) ) ) );
+	}
+
+	/**
 	 * 保存前のサニタイズ。値の正規化(カテゴリ解決等)はrender()側でまとめて行うため、
 	 * ここでは型・範囲のチェックのみ行う。
 	 */
@@ -467,6 +621,12 @@ final class AEM_WhatsNew {
 		$out['show_type']        = ! empty( $input['show_type'] ) ? 'yes' : 'no';
 		$out['number']           = (string) min( 50, max( 1, absint( $input['number'] ?? 10 ) ) );
 		$out['pagination']      = ! empty( $input['pagination'] ) ? 'yes' : 'no';
+		$out['pagination_mode']  = ( isset( $input['pagination_mode'] ) && 'async' === $input['pagination_mode'] ) ? 'async' : 'sync';
+		$out['pagination_style'] = in_array( $input['pagination_style'] ?? '', array( 'prev_next', 'load_more' ), true ) ? $input['pagination_style'] : 'numbers';
+		$out['pagination_position'] = in_array( $input['pagination_position'] ?? '', array( 'bottom_right', 'top_right' ), true ) ? $input['pagination_position'] : 'bottom_left';
+		$out['pagination_max_items'] = (string) max( 0, absint( $input['pagination_max_items'] ?? 0 ) );
+		$out['date_from']       = isset( $input['date_from'] ) && preg_match( '/^\d{4}-\d{2}-\d{2}$/', $input['date_from'] ) ? $input['date_from'] : '';
+		$out['date_to']         = isset( $input['date_to'] ) && preg_match( '/^\d{4}-\d{2}-\d{2}$/', $input['date_to'] ) ? $input['date_to'] : '';
 		$out['orderby']          = ( isset( $input['orderby'] ) && 'modified' === $input['orderby'] ) ? 'modified' : 'date';
 		$out['layout']           = ( isset( $input['layout'] ) && 'inline' === $input['layout'] ) ? 'inline' : 'stacked';
 		$out['category']         = isset( $input['category'] ) ? sanitize_text_field( $input['category'] ) : '';
@@ -592,6 +752,15 @@ final class AEM_WhatsNew {
 				);
 				break;
 
+			case 'date':
+				printf(
+					'<input type="date" id="%1$s" name="%2$s" value="%3$s" />',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_attr( $value )
+				);
+				break;
+
 			default:
 				printf(
 					'<input type="text" id="%1$s" name="%2$s" value="%3$s" class="regular-text" />',
@@ -602,36 +771,87 @@ final class AEM_WhatsNew {
 		}
 	}
 
-	public static function render( $atts = array() ) {
+	/**
+	 * @param array    $atts         ショートコード属性。
+	 * @param int|null $forced_page  非同期ページネーションのAjaxハンドラから、特定ページを強制指定するために使う。
+	 *                                通常のショートコード実行時はnullのままcurrent_page()の値を使う。
+	 */
+	public static function render( $atts = array(), $forced_page = null ) {
 		$atts = shortcode_atts( self::defaults(), $atts, self::SHORTCODE );
 
-		$title_tag      = in_array( $atts['title_tag'], self::ALLOWED_TITLE_TAGS, true ) ? $atts['title_tag'] : 'p';
-		$title_max_len  = max( 0, (int) $atts['title_max_length'] );
-		$orderby        = ( 'modified' === $atts['orderby'] ) ? 'modified' : 'date';
-		$date_field     = ( 'modified' === $orderby ) ? 'modified' : 'date';
-		$date_format    = '' !== $atts['date_format'] ? $atts['date_format'] : get_option( 'date_format' );
-		$newmark_days   = max( 0, (int) $atts['newmark_days'] );
-		$mark_latest    = self::is_truthy( $atts['newmark_latest'] );
-		$newmark_text   = (string) $atts['newmark_text'];
-		$show_type      = self::is_truthy( $atts['show_type'] );
-		$show_category  = self::is_truthy( $atts['show_category'] );
-		$category_limit = max( 0, (int) $atts['category_limit'] );
-		$layout_inline  = ( 'inline' === $atts['layout'] );
-		$paginate       = self::is_truthy( $atts['pagination'] );
-		$current_page   = $paginate ? self::current_page() : 1;
+		$title_tag       = in_array( $atts['title_tag'], self::ALLOWED_TITLE_TAGS, true ) ? $atts['title_tag'] : 'p';
+		$title_max_len   = max( 0, (int) $atts['title_max_length'] );
+		$orderby         = ( 'modified' === $atts['orderby'] ) ? 'modified' : 'date';
+		$date_field      = ( 'modified' === $orderby ) ? 'modified' : 'date';
+		$use_wareki      = ( 'wareki' === $atts['date_format'] );
+		$date_format     = ( '' !== $atts['date_format'] && ! $use_wareki ) ? $atts['date_format'] : get_option( 'date_format' );
+		$newmark_days    = max( 0, (int) $atts['newmark_days'] );
+		$mark_latest     = self::is_truthy( $atts['newmark_latest'] );
+		$newmark_text    = (string) $atts['newmark_text'];
+		$show_type       = self::is_truthy( $atts['show_type'] );
+		$show_category   = self::is_truthy( $atts['show_category'] );
+		$category_limit  = max( 0, (int) $atts['category_limit'] );
+		$layout_inline   = ( 'inline' === $atts['layout'] );
+		$paginate        = self::is_truthy( $atts['pagination'] );
+		$pagination_mode = ( 'async' === $atts['pagination_mode'] ) ? 'async' : 'sync';
+		$pagination_style = in_array( $atts['pagination_style'], array( 'prev_next', 'load_more' ), true ) ? $atts['pagination_style'] : 'numbers';
+		$pagination_position = in_array( $atts['pagination_position'], array( 'bottom_right', 'top_right' ), true ) ? $atts['pagination_position'] : 'bottom_left';
+		$max_items       = max( 0, (int) $atts['pagination_max_items'] );
+		$per_page        = min( 50, max( 1, (int) $atts['number'] ) );
+		$current_page    = $paginate ? ( null !== $forced_page ? max( 1, (int) $forced_page ) : self::current_page() ) : 1;
 
-		$query     = self::query_posts( $atts, $orderby, $current_page, $paginate );
-		$posts     = $query->posts;
-		$max_pages = $paginate ? (int) $query->max_num_pages : 1;
+		$max_pages = 1;
+		if ( $paginate ) {
+			// 実際に取得する前に件数だけ数え、current_pageを総ページ数(上限反映後)の範囲に丸める。
+			// これをしないと、load_more(累積取得)でURLの?whatsnew_page=を大きくされた場合に
+			// posts_per_page(= per_page * current_page)が際限なく膨らんでしまう。
+			$found_total = self::count_matching_posts( $atts, $orderby );
+			$max_pages   = max( 1, (int) ceil( $found_total / $per_page ) );
+			if ( $max_items > 0 ) {
+				$max_pages = min( $max_pages, max( 1, (int) ceil( $max_items / $per_page ) ) );
+			}
+			$current_page = min( $current_page, $max_pages );
+		}
+
+		// "load_more"はページを重ねるごとに一覧を積み増す仕様のため、都度「先頭からNページ分」を
+		// 一括取得する(offsetで切り出す通常のページ送りとは異なり、常にpaged=1で件数だけ増やす)。
+		$is_cumulative  = ( $paginate && 'load_more' === $pagination_style );
+		$query_per_page = $is_cumulative ? ( $per_page * $current_page ) : $per_page;
+		$query_paged    = $is_cumulative ? 1 : $current_page;
+
+		$query = self::query_posts( $atts, $orderby, $query_paged, $query_per_page );
+		$posts = $query->posts;
+
+		$pagination_html = $paginate
+			? self::render_pagination( $current_page, $max_pages, $pagination_style, $pagination_position )
+			: '';
 
 		wp_enqueue_style( self::STYLE_HANDLE );
 		self::ensure_custom_css();
+		if ( $paginate && 'async' === $pagination_mode ) {
+			wp_enqueue_script( self::SCRIPT_HANDLE );
+		}
+
+		$async_attrs = '';
+		if ( $paginate && 'async' === $pagination_mode ) {
+			$atts_for_js = $atts;
+			unset( $atts_for_js['custom_css'] ); // サイト全体設定であり、かつ長文になり得るためJS側には送らない。
+			$async_attrs = ' data-aem-whatsnew-async="1" data-aem-whatsnew-atts="' . esc_attr( (string) wp_json_encode( $atts_for_js ) ) . '"';
+		}
 
 		ob_start();
 		?>
-<div class="whatsnew">
-		<?php if ( '' !== $atts['title'] ) : ?>
-	<<?php echo $title_tag; // phpcs:ignore WordPress.Security.EscapeOutput -- ALLOWED_TITLE_TAGSで検証済み ?> class="whatsnew-title"><?php echo esc_html( $atts['title'] ); ?></<?php echo $title_tag; // phpcs:ignore WordPress.Security.EscapeOutput ?>>
+<div class="whatsnew"<?php echo $async_attrs; // phpcs:ignore WordPress.Security.EscapeOutput -- $async_attrsは組み立て時にesc_attr済み ?>>
+		<?php $show_header_pagination = ( $pagination_html && 'top_right' === $pagination_position ); ?>
+		<?php if ( '' !== $atts['title'] || $show_header_pagination ) : ?>
+	<div class="whatsnew-header">
+			<?php if ( '' !== $atts['title'] ) : ?>
+		<<?php echo $title_tag; // phpcs:ignore WordPress.Security.EscapeOutput -- ALLOWED_TITLE_TAGSで検証済み ?> class="whatsnew-title"><?php echo esc_html( $atts['title'] ); ?></<?php echo $title_tag; // phpcs:ignore WordPress.Security.EscapeOutput ?>>
+			<?php endif; ?>
+			<?php if ( $show_header_pagination ) : ?>
+		<?php echo $pagination_html; // phpcs:ignore WordPress.Security.EscapeOutput -- render_pagination()内で組み立て時にエスケープ済み ?>
+			<?php endif; ?>
+	</div>
 		<?php endif; ?>
 		<?php if ( empty( $posts ) ) : ?>
 			<?php if ( '' !== $atts['empty_text'] ) : ?>
@@ -643,9 +863,13 @@ final class AEM_WhatsNew {
 				<?php
 				$timestamp = get_post_timestamp( $post, $date_field );
 				$is_new    = self::is_new( $index, $timestamp, $newmark_days, $mark_latest );
-				$date_text = ( 'modified' === $date_field )
-					? get_the_modified_date( $date_format, $post )
-					: get_the_date( $date_format, $post );
+				if ( $use_wareki ) {
+					$date_text = self::wareki_date( $timestamp );
+				} else {
+					$date_text = ( 'modified' === $date_field )
+						? get_the_modified_date( $date_format, $post )
+						: get_the_date( $date_format, $post );
+				}
 				$title     = self::truncate_title( get_the_title( $post ), $title_max_len );
 				$datetime  = $timestamp ? gmdate( 'c', $timestamp ) : '';
 
@@ -683,8 +907,8 @@ final class AEM_WhatsNew {
 	<hr />
 			<?php endforeach; ?>
 		<?php endif; ?>
-		<?php if ( $paginate ) : ?>
-	<?php echo self::render_pagination( $current_page, $max_pages ); // phpcs:ignore WordPress.Security.EscapeOutput -- render_pagination()内でpaginate_links()がエスケープ済み ?>
+		<?php if ( $pagination_html && ! $show_header_pagination ) : ?>
+	<?php echo $pagination_html; // phpcs:ignore WordPress.Security.EscapeOutput -- render_pagination()内で組み立て時にエスケープ済み ?>
 		<?php endif; ?>
 </div>
 		<?php
@@ -700,21 +924,67 @@ final class AEM_WhatsNew {
 	 *
 	 * @return WP_Query
 	 */
-	private static function query_posts( array $atts, $orderby, $paged, $paginate ) {
+	private static function query_posts( array $atts, $orderby, $paged, $posts_per_page ) {
+		$args = self::build_query_args( $atts, $orderby );
+
+		$args['posts_per_page'] = min( 500, max( 1, (int) $posts_per_page ) );
+		$args['paged']          = max( 1, (int) $paged );
+		// 件数(found_posts)が必要な場合はcount_matching_posts()で別途取得するため、
+		// ここでのSQL_CALC_FOUND_ROWSは常に無効化しておく。
+		$args['no_found_rows']  = true;
+
+		$args = apply_filters( 'aem_whatsnew_query_args', $args, $atts );
+
+		return new WP_Query( $args );
+	}
+
+	/**
+	 * ページネーションの総ページ数を出すための、条件に合う投稿の総数だけを数える軽量クエリ。
+	 *
+	 * @return int
+	 */
+	private static function count_matching_posts( array $atts, $orderby ) {
+		$args                   = self::build_query_args( $atts, $orderby );
+		$args['posts_per_page'] = 1;
+		$args['paged']          = 1;
+		$args['no_found_rows']  = false;
+		$args['fields']         = 'ids';
+
+		$args = apply_filters( 'aem_whatsnew_query_args', $args, $atts );
+
+		$query = new WP_Query( $args );
+
+		return (int) $query->found_posts;
+	}
+
+	/**
+	 * query_posts()/count_matching_posts()で共有する、投稿タイプ・カテゴリ・除外・期間などの
+	 * 絞り込み条件(posts_per_page/paged/no_found_rows以外)を組み立てる。
+	 */
+	private static function build_query_args( array $atts, $orderby ) {
 		$args = array(
 			'post_type'           => self::parse_post_types( $atts['post_type'] ),
 			'post_status'         => 'publish',
-			'posts_per_page'      => min( 50, max( 1, (int) $atts['number'] ) ),
-			'paged'               => max( 1, (int) $paged ),
 			'orderby'             => $orderby,
 			'order'               => 'DESC',
 			'ignore_sticky_posts' => true,
-			// ページネーション有効時のみtotal件数(max_num_pages)が必要になるため計算させる。
-			'no_found_rows'       => ! $paginate,
 			'update_post_meta_cache' => false,
 			// カテゴリ列を表示する場合はget_the_category()がpost毎にDBを叩かないよう事前キャッシュする。
 			'update_post_term_cache' => self::is_truthy( $atts['show_category'] ?? 'no' ),
 		);
+
+		$date_query = array();
+		if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', (string) ( $atts['date_from'] ?? '' ) ) ) {
+			$date_query['after'] = $atts['date_from'] . ' 00:00:00';
+		}
+		if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', (string) ( $atts['date_to'] ?? '' ) ) ) {
+			$date_query['before'] = $atts['date_to'] . ' 23:59:59';
+		}
+		if ( ! empty( $date_query ) ) {
+			$date_query['column']    = ( 'modified' === $orderby ) ? 'post_modified' : 'post_date';
+			$date_query['inclusive'] = true;
+			$args['date_query']      = array( $date_query ); // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_date_query
+		}
 
 		$tax_query = array();
 
@@ -752,15 +1022,7 @@ final class AEM_WhatsNew {
 			$args['post__not_in'] = $exclude_ids;
 		}
 
-		/**
-		 * 新着情報のクエリ引数を差し替えるためのフィルタ。
-		 *
-		 * @param array $args WP_Queryの引数
-		 * @param array $atts 正規化前のショートコード属性
-		 */
-		$args = apply_filters( 'aem_whatsnew_query_args', $args, $atts );
-
-		return new WP_Query( $args );
+		return $args;
 	}
 
 	/**
@@ -775,14 +1037,39 @@ final class AEM_WhatsNew {
 	/**
 	 * ページネーションのリンク一覧をHTMLで返す(1ページしかない場合は空文字)。
 	 */
-	private static function render_pagination( $current_page, $max_pages ) {
+	private static function render_pagination( $current_page, $max_pages, $style = 'numbers', $position = 'bottom_left' ) {
 		$max_pages = (int) $max_pages;
 		if ( $max_pages <= 1 ) {
 			return '';
 		}
 
-		$base  = add_query_arg( self::PAGE_QUERY_VAR, '%#%' );
-		$links = paginate_links(
+		if ( 'load_more' === $style ) {
+			$inner       = self::pagination_inner_load_more( $current_page, $max_pages );
+			$style_class = 'whatsnew-pagination-load-more';
+		} elseif ( 'prev_next' === $style ) {
+			$inner       = self::pagination_inner_prev_next( $current_page, $max_pages );
+			$style_class = 'whatsnew-pagination-prev-next';
+		} else {
+			$inner       = self::pagination_inner_numbers( $current_page, $max_pages );
+			$style_class = 'whatsnew-pagination-numbers';
+		}
+
+		if ( '' === $inner ) {
+			return '';
+		}
+
+		$position_class = 'whatsnew-pagination-pos-' . str_replace( '_', '-', $position );
+
+		return '<nav class="whatsnew-pagination ' . $style_class . ' ' . $position_class . '" aria-label="Pagination">' . $inner . '</nav>';
+	}
+
+	/**
+	 * スタイル「番号付き」: paginate_links()による通常のページ番号一覧(<nav>の中身のみ)。
+	 */
+	private static function pagination_inner_numbers( $current_page, $max_pages ) {
+		$base = add_query_arg( self::PAGE_QUERY_VAR, '%#%' );
+
+		return (string) paginate_links(
 			array(
 				'base'      => $base,
 				'format'    => '',
@@ -793,12 +1080,38 @@ final class AEM_WhatsNew {
 				'next_text' => '›',
 			)
 		);
+	}
 
-		if ( ! $links ) {
+	/**
+	 * スタイル「前へ/次へのみ」: 番号を出さず、前後のリンクだけを出す(<nav>の中身のみ)。
+	 */
+	private static function pagination_inner_prev_next( $current_page, $max_pages ) {
+		$parts = array();
+
+		if ( $current_page > 1 ) {
+			$prev_url = add_query_arg( self::PAGE_QUERY_VAR, $current_page - 1 );
+			$parts[]  = '<a class="whatsnew-prev" href="' . esc_url( $prev_url ) . '">' . esc_html( self::t( 'pagination_prev' ) ) . '</a>';
+		}
+		if ( $current_page < $max_pages ) {
+			$next_url = add_query_arg( self::PAGE_QUERY_VAR, $current_page + 1 );
+			$parts[]  = '<a class="whatsnew-next" href="' . esc_url( $next_url ) . '">' . esc_html( self::t( 'pagination_next' ) ) . '</a>';
+		}
+
+		return implode( ' ', $parts );
+	}
+
+	/**
+	 * スタイル「もっと見るボタン」: 次ページへのリンクを1つだけ出す(最終ページでは空文字、<nav>の中身のみ)。
+	 * render()側で、このスタイルの場合はページ内容自体が累積取得になっている点に注意。
+	 */
+	private static function pagination_inner_load_more( $current_page, $max_pages ) {
+		if ( $current_page >= $max_pages ) {
 			return '';
 		}
 
-		return '<nav class="whatsnew-pagination" aria-label="Pagination">' . $links . '</nav>';
+		$next_url = add_query_arg( self::PAGE_QUERY_VAR, $current_page + 1 );
+
+		return '<a class="whatsnew-load-more" href="' . esc_url( $next_url ) . '">' . esc_html( self::t( 'load_more_text' ) ) . '</a>';
 	}
 
 	/**
@@ -913,6 +1226,62 @@ final class AEM_WhatsNew {
 		}
 
 		return mb_substr( $title, 0, $max_length ) . '…';
+	}
+
+	/**
+	 * 明治以降の元号境界(開始日のUNIXタイムスタンプ、新しい順)。
+	 *
+	 * @return array<int, array{name: string, start: int}>
+	 */
+	private static function wareki_eras() {
+		return array(
+			array(
+				'name'  => '令和',
+				'start' => strtotime( '2019-05-01 00:00:00' ),
+			),
+			array(
+				'name'  => '平成',
+				'start' => strtotime( '1989-01-08 00:00:00' ),
+			),
+			array(
+				'name'  => '昭和',
+				'start' => strtotime( '1926-12-25 00:00:00' ),
+			),
+			array(
+				'name'  => '大正',
+				'start' => strtotime( '1912-07-30 00:00:00' ),
+			),
+			array(
+				'name'  => '明治',
+				'start' => strtotime( '1868-01-25 00:00:00' ),
+			),
+		);
+	}
+
+	/**
+	 * date_format="wareki"指定時に使う、和暦表示(例: 令和7年7月27日)。
+	 * サイトのタイムゾーン設定に合わせるため、gmdate()ではなくwp_date()で年月日を取り出す。
+	 */
+	private static function wareki_date( $timestamp ) {
+		if ( ! $timestamp ) {
+			return '';
+		}
+
+		$year  = (int) wp_date( 'Y', $timestamp );
+		$month = (int) wp_date( 'n', $timestamp );
+		$day   = (int) wp_date( 'j', $timestamp );
+
+		foreach ( self::wareki_eras() as $era ) {
+			if ( $timestamp >= $era['start'] ) {
+				$era_year = $year - (int) wp_date( 'Y', $era['start'] ) + 1;
+				$era_year_label = ( 1 === $era_year ) ? '元' : (string) $era_year;
+
+				return $era['name'] . $era_year_label . '年' . $month . '月' . $day . '日';
+			}
+		}
+
+		// 明治より前(1868-01-25より前)は元号を特定せず西暦のみで表示する。
+		return $year . '年' . $month . '月' . $day . '日';
 	}
 
 	/**

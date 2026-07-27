@@ -4,8 +4,10 @@
  * 旧プラグイン(whats-new-genarator/whats-new.css)の見た目をそのまま引き継ぐ。
  * セレクタも .whatsnew / .newmark / dl,dt,dd のままなので、移行しても表示は変わらない。
  * 追加分は .whatsnew-title / .whatsnew-empty / .whatsnew-type / .whatsnew-category /
- * .whatsnew-row(layout="inline"時のみ使用) / .whatsnew-pagination(pagination="yes"時のみ使用)のみ。
+ * .whatsnew-row(layout="inline"時のみ使用) / .whatsnew-pagination・.whatsnew-load-more
+ * (pagination="yes"時のみ使用) / .whatsnew-header(pagination_position="top_right"時のみ使用)のみ。
  * これらの見た目は設定画面の「カスタムCSS」欄からも上書きできる。
+ * pagination_mode="async"時のみ aem-whatsnew.js(素のJS、ビルド不要)を読み込む。
  */
 
 div.whatsnew {
@@ -104,8 +106,50 @@ div.whatsnew .whatsnew-pagination {
   margin: 0.75em 0 0 0.3em;
 }
 
+/* 上の`div.whatsnew a`(display:blockかつ縦paddingのみ)はページ送りリンク向けではないため上書きする。 */
+div.whatsnew .whatsnew-pagination a {
+  display: inline-block;
+  padding: 0.2em 0.5em;
+}
+
 div.whatsnew .whatsnew-pagination .page-numbers.current {
   font-weight: bold;
+}
+
+div.whatsnew .whatsnew-pagination-load-more {
+  justify-content: center;
+}
+
+div.whatsnew .whatsnew-load-more {
+  display: inline-block;
+  padding: 0.4em 1.2em;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  background-color: #f5f5f5;
+}
+
+div.whatsnew .whatsnew-load-more[aria-busy="true"] {
+  opacity: 0.6;
+}
+
+div.whatsnew .whatsnew-pagination-pos-bottom-right {
+  justify-content: flex-end;
+}
+
+/* pagination_position="top_right" のときだけ使われる、見出しとページネーションの行。 */
+div.whatsnew .whatsnew-header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+
+div.whatsnew .whatsnew-header .whatsnew-title {
+  margin: 0;
+}
+
+div.whatsnew .whatsnew-header .whatsnew-pagination {
+  margin: 0 0 0 auto;
 }
 
 @media screen and (min-width: 600px) {
