@@ -4,7 +4,7 @@ Tags: shortcode, whats-new, news, recent-posts, category
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -56,6 +56,15 @@ WordPressプラグイン「What's New Generator」(WordPress.org スラッグ: `
 
 == Changelog ==
 
+= 1.2.0 =
+* 一覧にカテゴリ列・投稿タイプ列を追加できるようにした(`show_category`/`show_type`、カテゴリ列は`category_limit`で列挙数を制限可能)。
+* タイトルの最大表示文字数を指定できるようにした(`title_max_length`、超過分は「…」表示)。
+* `NEW!` マークの文字列を変更できるようにした(`newmark_text`)。
+* 設定画面に「カスタムCSS」欄を追加。同梱CSSに追加で読み込まれ、NEW!マークや一覧全体の見た目を上書きできる。
+
+= 1.1.1 =
+* 設定画面の「対象投稿タイプ」を自由入力からチェックボックスに変更(このサイトで公開状態になっている投稿タイプを自動列挙)。
+
 = 1.1.0 =
 * 管理画面(設定 > AEM What's New)を追加。プレビュー付きでショートコードの既定値を編集できるようになった。ショートコード属性を明示指定した場合はそちらが優先される。
 
@@ -63,6 +72,12 @@ WordPressプラグイン「What's New Generator」(WordPress.org スラッグ: `
 * 初版。外部プラグイン「What's New Generator」の置き換えとして、東北大学金研分析電顕室サイトで運用してきたものをリポジトリ化。
 
 == Upgrade Notice ==
+
+= 1.2.0 =
+カテゴリ/投稿タイプ列、タイトル文字数制限、NEW!文字列変更、カスタムCSSを追加。既定では何も表示が変わらない(すべてopt-in)。
+
+= 1.1.1 =
+設定画面の「対象投稿タイプ」がチェックボックス選択式になった。既存の保存値は自動的に引き継がれる。
 
 = 1.1.0 =
 管理画面(設定 > AEM What's New)を追加。既存のショートコード運用に影響なし。

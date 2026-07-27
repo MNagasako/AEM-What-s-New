@@ -3,7 +3,8 @@
  *
  * 旧プラグイン(whats-new-genarator/whats-new.css)の見た目をそのまま引き継ぐ。
  * セレクタも .whatsnew / .newmark / dl,dt,dd のままなので、移行しても表示は変わらない。
- * 追加分は .whatsnew-title と .whatsnew-empty のみ。
+ * 追加分は .whatsnew-title / .whatsnew-empty / .whatsnew-type / .whatsnew-category のみ。
+ * これらの見た目は設定画面の「カスタムCSS」欄からも上書きできる。
  */
 
 div.whatsnew {
@@ -62,6 +63,12 @@ div.whatsnew dd {
 
 div.whatsnew .whatsnew-title {
   margin: 0;
+}
+
+div.whatsnew .whatsnew-type,
+div.whatsnew .whatsnew-category {
+  font-size: 85%;
+  color: Gray;
 }
 
 div.whatsnew .whatsnew-empty {

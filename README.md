@@ -103,16 +103,26 @@ WordPress標準API(`WP_Query` + ショートコードAPI)だけで実装され�
 | --- | --- | --- |
 | `title` | `新着情報` | 見出しテキスト。空文字 `""` で非表示 |
 | `title_tag` | `p` | 見出しのタグ。`p`/`h2`〜`h6`/`div` 以外を指定すると `p` にフォールバック |
+| `title_max_length` | `0` | タイトルの最大表示文字数(マルチバイト対応)。超えた分は`…`に置き換える。`0`で切り詰めなし |
 | `post_type` | `post,page` | 対象の投稿タイプ(カンマ区切り)。公開(`public`)なタイプのみ有効、それ以外は無視される |
+| `show_type` | `no` | 投稿タイプ列(`post`/`page`等のラベル)を表示するか |
 | `number` | `10` | 表示件数(1〜50) |
 | `orderby` | `date` | `date`(投稿日)または `modified`(更新日) |
 | `category` | (空=全カテゴリ) | 対象カテゴリ。スラッグ/カテゴリ名/ID、カンマ区切りで複数指定可 |
+| `show_category` | `no` | カテゴリ列(投稿に紐づくカテゴリ名)を表示するか |
+| `category_limit` | `3` | カテゴリ列に列挙するカテゴリ数の上限(1記事あたり)。`0`で上限なし。`show_category="yes"`の場合のみ有効 |
 | `exclude_category` | `exclude-from-whatsnew,uncategorized` | 除外カテゴリ。指定すると既定値を上書きする |
 | `exclude_ids` | (空) | 個別に除外したい投稿ID/固定ページID(カンマ区切り) |
 | `newmark_days` | `30` | この日数以内に投稿されたものに `NEW!` を付ける。`0` で無効化 |
 | `newmark_latest` | `yes` | 最新1件には日数に関わらず常に `NEW!` を付けるか |
+| `newmark_text` | `NEW!` | 新着マークの文字列。空文字にするとマーク自体を表示しない |
 | `date_format` | (空="設定 > 一般"の日付フォーマット) | 日付の表示形式(PHPの`date()`書式) |
 | `empty_text` | `現在、新着情報はありません。` | 該当記事が0件のときの表示文言。空文字で非表示 |
+
+`custom_css`(カスタムCSS)はページ単位ではなくサイト全体に効くため、ショートコード属性ではなく
+「設定 > AEM What's New」の管理画面からのみ編集する。同梱の`aem-whatsnew.css`に追加で読み込まれ、
+`.whatsnew` / `.whatsnew-item` / `.newmark` / `.whatsnew-type` / `.whatsnew-category` 等の
+クラスを対象に見た目を上書きできる。
 
 ### カテゴリ指定の仕組み(複数サイトでの再利用について)
 
