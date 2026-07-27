@@ -21,6 +21,15 @@ License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 詳しい属性一覧・使用例は [README](https://github.com/MNagasako/AEM-What-s-New#使い方usage) を参照してください。
 
+= 謝辞・経緯 =
+
+長らく運用していた、田中秀樹氏作のWordPressプラグイン「What's New Generator」
+(WordPress.org スラッグ: `whats-new-genarator`)に感謝します。同プラグインはWordPress.org
+公式ディレクトリで配布されていましたが、2024年6月15日付で「セキュリティ上の問題」を理由に
+公開停止となりダウンロードできなくなりました(最終版は v2.0.2)。ソースコードや仕様の情報を
+改めて入手できなかったため、本番サイトでの出力・挙動の観察をもとに、WordPress標準APIのみで
+ゼロから独自に再実装したものが本プラグインです。
+
 == Installation ==
 
 1. `aem-whatsnew` フォルダごと `wp-content/plugins/` に配置する。
