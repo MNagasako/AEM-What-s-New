@@ -3,7 +3,8 @@
  *
  * 旧プラグイン(whats-new-genarator/whats-new.css)の見た目をそのまま引き継ぐ。
  * セレクタも .whatsnew / .newmark / dl,dt,dd のままなので、移行しても表示は変わらない。
- * 追加分は .whatsnew-title / .whatsnew-empty / .whatsnew-type / .whatsnew-category のみ。
+ * 追加分は .whatsnew-title / .whatsnew-empty / .whatsnew-type / .whatsnew-category /
+ * .whatsnew-row(layout="inline"時のみ使用)のみ。
  * これらの見た目は設定画面の「カスタムCSS」欄からも上書きできる。
  */
 
@@ -74,6 +75,25 @@ div.whatsnew .whatsnew-category {
 div.whatsnew .whatsnew-empty {
   margin: 0.5em 0 0 0.3em;
   color: Gray;
+}
+
+/* layout="inline" のときだけ使われる、日付・タイプ・カテゴリ・タイトルの横並び行。 */
+div.whatsnew .whatsnew-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  margin: 0 0 0 0.3em;
+}
+
+div.whatsnew .whatsnew-row .whatsnew-date {
+  color: Gray;
+  white-space: nowrap;
+}
+
+div.whatsnew .whatsnew-row .whatsnew-type,
+div.whatsnew .whatsnew-row .whatsnew-category {
+  white-space: nowrap;
 }
 
 @media screen and (min-width: 600px) {

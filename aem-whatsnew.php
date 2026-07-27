@@ -3,7 +3,7 @@
  * Plugin Name: AEM What's New
  * Plugin URI:  https://github.com/MNagasako/AEM-What-s-New
  * Description: 新着情報一覧をWordPress標準API(WP_Query + ショートコードAPI)だけで表示する。外部プラグイン「What's New Generator」の置き換え。
- * Version:     1.2.0
+ * Version:     1.3.0
  * Author:      分析電顕室
  * License:     GPL-2.0-or-later
  * Requires at least: 6.0
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 final class AEM_WhatsNew {
 
-	const VERSION           = '1.2.0';
+	const VERSION           = '1.3.0';
 	const SHORTCODE         = 'aem_whatsnew';
 	const LEGACY_SHORTCODE  = 'showwhatsnew';
 	const STYLE_HANDLE      = 'aem-whatsnew';
@@ -80,13 +80,14 @@ final class AEM_WhatsNew {
 	 */
 	private static function hard_defaults() {
 		return array(
-			'title'            => '新着情報',
+			'title'            => self::t( 'default_title' ),
 			'title_tag'        => 'p',
 			'title_max_length' => '0',               // 0で切り詰めなし
 			'post_type'        => 'post,page',
 			'show_type'        => 'no',               // 投稿タイプ列を表示するか
 			'number'           => '10',
 			'orderby'          => 'date',            // date | modified
+			'layout'           => 'stacked',          // stacked(積み重ね) | inline(1行)
 			'category'         => '',                // 表示対象に含めるカテゴリ(空=全部)
 			'show_category'    => 'no',               // カテゴリ列を表示するか
 			'category_limit'   => '3',               // 1件あたりのカテゴリ列挙数上限(0で上限なし)
@@ -94,11 +95,154 @@ final class AEM_WhatsNew {
 			'exclude_ids'      => '',                // 投稿ID/固定ページIDで個別除外
 			'newmark_days'     => '30',              // 0でNEW!マークを無効化
 			'newmark_latest'   => 'yes',             // 最新1件には常にNEW!を付ける
-			'newmark_text'     => 'NEW!',
+			'newmark_text'     => self::t( 'default_newmark_text' ),
 			'date_format'      => '',                // 空=「設定 > 一般」の日付フォーマット
-			'empty_text'       => '現在、新着情報はありません。',
+			'empty_text'       => self::t( 'default_empty_text' ),
 			'custom_css'       => '',                // 設定画面のみで編集。ショートコード属性としては扱わない
+			'ui_language'      => 'auto',             // auto | ja | en (管理画面表示と上記既定文言に使う)
 		);
+	}
+
+	/**
+	 * 管理画面・既定文言の表示言語を決める(auto/ja/en)。
+	 *
+	 * hard_defaults()から呼ばれるため、循環参照を避けるためdefaults()は経由せず
+	 * 保存済みオプションを直接読む。
+	 */
+	private static function current_lang() {
+		$saved   = get_option( self::OPTION_NAME, array() );
+		$setting = ( is_array( $saved ) && isset( $saved['ui_language'] ) ) ? $saved['ui_language'] : 'auto';
+
+		if ( in_array( $setting, array( 'ja', 'en' ), true ) ) {
+			return $setting;
+		}
+
+		return ( 0 === strpos( (string) get_locale(), 'ja' ) ) ? 'ja' : 'en';
+	}
+
+	/**
+	 * 表示言語(ja/en)ごとの管理画面文言・既定文言のテーブル。
+	 *
+	 * ビルド手順を持たないプラグインのため、.po/.mo翻訳ファイルではなく
+	 * この配列から直接文字列を引く方式にしてある。
+	 */
+	private static function strings() {
+		return array(
+			'ja' => array(
+				'settings_link'          => '設定',
+				'page_heading'           => "AEM What's New — 設定",
+				'intro'                  => 'ここで指定した値は、ショートコード [aem_whatsnew] / [showwhatsnew] の既定値になります。ショートコード側で属性を明示指定した場合は、そちらが優先されます。',
+				'preview_heading'        => 'プレビュー',
+				'preview_desc'           => '現在保存されている設定で [aem_whatsnew] を表示した場合の見た目です。',
+				'checkbox_enable'        => '有効にする',
+				'label_title'            => '見出しテキスト',
+				'desc_title'             => '空にすると見出しを表示しない',
+				'label_title_tag'        => '見出しタグ',
+				'label_title_max_length' => 'タイトル最大文字数',
+				'desc_title_max_length'  => 'この文字数を超える部分は「…」に置き換える。0で切り詰めなし',
+				'label_post_type'        => '対象投稿タイプ',
+				'desc_post_type'         => 'このサイトで公開状態(public)になっている投稿タイプの一覧。何もチェックしない場合は post のみが対象になる',
+				'label_show_type'        => '投稿タイプ列を表示する',
+				'label_number'           => '表示件数',
+				'label_orderby'          => '並び順',
+				'choice_orderby_date'     => '投稿日',
+				'choice_orderby_modified' => '更新日',
+				'label_layout'           => '一覧のレイアウト',
+				'desc_layout'            => '「1行」を選ぶと日付・タイプ・カテゴリ・タイトルが横一列に並ぶ(カスタムCSSで細かい配置調整も可能)',
+				'choice_layout_stacked'  => '積み重ね(既定、日付の下にタイトル等を表示)',
+				'choice_layout_inline'   => '1行(日付・タイプ・カテゴリ・タイトルを横一列に表示)',
+				'label_category'         => '対象カテゴリ',
+				'desc_category'          => 'スラッグ/カテゴリ名/IDをカンマ区切りで指定。空で全カテゴリ',
+				'label_show_category'    => 'カテゴリ列を表示する',
+				'label_category_limit'   => 'カテゴリ列の表示数上限',
+				'desc_category_limit'    => '1記事あたりに列挙するカテゴリ数の上限(カテゴリ列を表示する場合のみ有効)。0で上限なし',
+				'label_exclude_category' => '除外カテゴリ',
+				'desc_exclude_category'  => 'スラッグ/カテゴリ名/IDをカンマ区切りで指定',
+				'label_exclude_ids'      => '個別除外ID',
+				'desc_exclude_ids'       => '投稿ID/固定ページIDをカンマ区切りで指定',
+				'label_newmark_days'     => 'NEW!表示日数',
+				'desc_newmark_days'      => '0でNEW!マークを無効化',
+				'label_newmark_latest'   => '最新1件に常にNEW!を付ける',
+				'label_newmark_text'     => 'NEW!マークの文字列',
+				'desc_newmark_text'      => '空にするとマーク自体を表示しない',
+				'label_date_format'      => '日付フォーマット',
+				'desc_date_format'       => '空欄で「設定 > 一般」の日付形式を使用(PHPのdate()書式)',
+				'label_empty_text'       => '0件時の表示文言',
+				'desc_empty_text'        => '空にすると非表示',
+				'label_custom_css'       => 'カスタムCSS',
+				'desc_custom_css'        => '同梱の aem-whatsnew.css に追加で読み込まれる。NEW!マークや日付/タイトル/カテゴリ/タイプの並び方など、見た目全般をここで上書きできる(対象クラス: .whatsnew, .whatsnew-title, .whatsnew-item, .whatsnew-row, .newmark, .whatsnew-type, .whatsnew-category 等)',
+				'label_ui_language'      => '管理画面・既定文言の表示言語',
+				'desc_ui_language'       => '「自動」はサイトの言語設定(ja/それ以外)に追従する',
+				'choice_lang_auto'       => '自動(サイトの言語設定に従う)',
+				'choice_lang_ja'         => '日本語',
+				'choice_lang_en'         => 'English',
+				'default_title'          => '新着情報',
+				'default_newmark_text'   => 'NEW!',
+				'default_empty_text'     => '現在、新着情報はありません。',
+			),
+			'en' => array(
+				'settings_link'          => 'Settings',
+				'page_heading'           => "AEM What's New — Settings",
+				'intro'                  => 'Values set here become the defaults for the [aem_whatsnew] / [showwhatsnew] shortcode. Explicit shortcode attributes always take priority over these settings.',
+				'preview_heading'        => 'Preview',
+				'preview_desc'           => 'This is how [aem_whatsnew] currently renders with the settings saved below.',
+				'checkbox_enable'        => 'Enable',
+				'label_title'            => 'Heading text',
+				'desc_title'             => 'Leave empty to hide the heading',
+				'label_title_tag'        => 'Heading tag',
+				'label_title_max_length' => 'Title max length',
+				'desc_title_max_length'  => 'Titles longer than this are truncated with a trailing "…". 0 disables truncation',
+				'label_post_type'        => 'Post types',
+				'desc_post_type'         => 'Public post types registered on this site. If none are checked, only "post" is used',
+				'label_show_type'        => 'Show a post-type column',
+				'label_number'           => 'Number of items',
+				'label_orderby'          => 'Order by',
+				'choice_orderby_date'     => 'Publish date',
+				'choice_orderby_modified' => 'Modified date',
+				'label_layout'           => 'List layout',
+				'desc_layout'            => '"Single line" puts the date, type, category and title on one row (use the custom CSS box for fine-tuning)',
+				'choice_layout_stacked'  => 'Stacked (default — title etc. below the date)',
+				'choice_layout_inline'   => 'Single line (date, type, category and title in one row)',
+				'label_category'         => 'Categories',
+				'desc_category'          => 'Comma-separated slugs, names, or IDs. Leave empty for all categories',
+				'label_show_category'    => 'Show a category column',
+				'label_category_limit'   => 'Category column limit',
+				'desc_category_limit'    => 'Max number of categories listed per item (only used when the category column is shown). 0 = no limit',
+				'label_exclude_category' => 'Excluded categories',
+				'desc_exclude_category'  => 'Comma-separated slugs, names, or IDs',
+				'label_exclude_ids'      => 'Excluded post IDs',
+				'desc_exclude_ids'       => 'Comma-separated post/page IDs to exclude individually',
+				'label_newmark_days'     => '"NEW!" mark duration (days)',
+				'desc_newmark_days'      => '0 disables the "NEW!" mark',
+				'label_newmark_latest'   => 'Always mark the newest item as new',
+				'label_newmark_text'     => '"NEW!" mark text',
+				'desc_newmark_text'      => 'Leave empty to hide the mark entirely',
+				'label_date_format'      => 'Date format',
+				'desc_date_format'       => "Leave empty to use the site's Settings > General date format (PHP date() syntax)",
+				'label_empty_text'       => 'Empty-state text',
+				'desc_empty_text'        => 'Shown when there are no matching items. Leave empty to hide',
+				'label_custom_css'       => 'Custom CSS',
+				'desc_custom_css'        => 'Loaded in addition to the bundled aem-whatsnew.css. Use it to restyle anything, including the "NEW!" mark and the list layout (relevant classes: .whatsnew, .whatsnew-title, .whatsnew-item, .whatsnew-row, .newmark, .whatsnew-type, .whatsnew-category, etc.)',
+				'label_ui_language'      => 'Admin screen & default text language',
+				'desc_ui_language'       => '"Auto" follows the site\'s language setting (Japanese vs. everything else)',
+				'choice_lang_auto'       => 'Auto (follow site language)',
+				'choice_lang_ja'         => '日本語 (Japanese)',
+				'choice_lang_en'         => 'English',
+				'default_title'          => 'What\'s New',
+				'default_newmark_text'   => 'NEW!',
+				'default_empty_text'     => 'No new updates at this time.',
+			),
+		);
+	}
+
+	/**
+	 * current_lang()に応じた文言を返す。未定義キーはenへフォールバックする。
+	 */
+	private static function t( $key ) {
+		$lang    = self::current_lang();
+		$strings = self::strings();
+
+		return $strings[ $lang ][ $key ] ?? ( $strings['en'][ $key ] ?? $key );
 	}
 
 	/**
@@ -121,100 +265,119 @@ final class AEM_WhatsNew {
 		return array(
 			'title'            => array(
 				'type'  => 'text',
-				'label' => '見出しテキスト',
-				'desc'  => '空にすると見出しを表示しない',
+				'label' => self::t( 'label_title' ),
+				'desc'  => self::t( 'desc_title' ),
 			),
 			'title_tag'        => array(
 				'type'    => 'select',
-				'label'   => '見出しタグ',
+				'label'   => self::t( 'label_title_tag' ),
 				'choices' => array_combine( self::ALLOWED_TITLE_TAGS, self::ALLOWED_TITLE_TAGS ),
 			),
 			'title_max_length' => array(
 				'type'  => 'number',
-				'label' => 'タイトル最大文字数',
+				'label' => self::t( 'label_title_max_length' ),
 				'min'   => 0,
 				'max'   => 200,
-				'desc'  => 'この文字数を超える部分は「…」に置き換える。0で切り詰めなし',
+				'desc'  => self::t( 'desc_title_max_length' ),
 			),
 			'post_type'        => array(
 				'type'  => 'post_types',
-				'label' => '対象投稿タイプ',
-				'desc'  => 'このサイトで公開状態(public)になっている投稿タイプの一覧。何もチェックしない場合は post のみが対象になる',
+				'label' => self::t( 'label_post_type' ),
+				'desc'  => self::t( 'desc_post_type' ),
 			),
 			'show_type'        => array(
 				'type'  => 'checkbox',
-				'label' => '投稿タイプ列を表示する',
+				'label' => self::t( 'label_show_type' ),
 			),
 			'number'           => array(
 				'type'  => 'number',
-				'label' => '表示件数',
+				'label' => self::t( 'label_number' ),
 				'min'   => 1,
 				'max'   => 50,
 			),
 			'orderby'          => array(
 				'type'    => 'select',
-				'label'   => '並び順',
+				'label'   => self::t( 'label_orderby' ),
 				'choices' => array(
-					'date'     => '投稿日',
-					'modified' => '更新日',
+					'date'     => self::t( 'choice_orderby_date' ),
+					'modified' => self::t( 'choice_orderby_modified' ),
+				),
+			),
+			'layout'           => array(
+				'type'    => 'select',
+				'label'   => self::t( 'label_layout' ),
+				'desc'    => self::t( 'desc_layout' ),
+				'choices' => array(
+					'stacked' => self::t( 'choice_layout_stacked' ),
+					'inline'  => self::t( 'choice_layout_inline' ),
 				),
 			),
 			'category'         => array(
 				'type'  => 'text',
-				'label' => '対象カテゴリ',
-				'desc'  => 'スラッグ/カテゴリ名/IDをカンマ区切りで指定。空で全カテゴリ',
+				'label' => self::t( 'label_category' ),
+				'desc'  => self::t( 'desc_category' ),
 			),
 			'show_category'    => array(
 				'type'  => 'checkbox',
-				'label' => 'カテゴリ列を表示する',
+				'label' => self::t( 'label_show_category' ),
 			),
 			'category_limit'   => array(
 				'type'  => 'number',
-				'label' => 'カテゴリ列の表示数上限',
+				'label' => self::t( 'label_category_limit' ),
 				'min'   => 0,
 				'max'   => 20,
-				'desc'  => '1記事あたりに列挙するカテゴリ数の上限(カテゴリ列を表示する場合のみ有効)。0で上限なし',
+				'desc'  => self::t( 'desc_category_limit' ),
 			),
 			'exclude_category' => array(
 				'type'  => 'text',
-				'label' => '除外カテゴリ',
-				'desc'  => 'スラッグ/カテゴリ名/IDをカンマ区切りで指定',
+				'label' => self::t( 'label_exclude_category' ),
+				'desc'  => self::t( 'desc_exclude_category' ),
 			),
 			'exclude_ids'      => array(
 				'type'  => 'text',
-				'label' => '個別除外ID',
-				'desc'  => '投稿ID/固定ページIDをカンマ区切りで指定',
+				'label' => self::t( 'label_exclude_ids' ),
+				'desc'  => self::t( 'desc_exclude_ids' ),
 			),
 			'newmark_days'     => array(
 				'type'  => 'number',
-				'label' => 'NEW!表示日数',
+				'label' => self::t( 'label_newmark_days' ),
 				'min'   => 0,
 				'max'   => 3650,
-				'desc'  => '0でNEW!マークを無効化',
+				'desc'  => self::t( 'desc_newmark_days' ),
 			),
 			'newmark_latest'   => array(
 				'type'  => 'checkbox',
-				'label' => '最新1件に常にNEW!を付ける',
+				'label' => self::t( 'label_newmark_latest' ),
 			),
 			'newmark_text'     => array(
 				'type'  => 'text',
-				'label' => 'NEW!マークの文字列',
-				'desc'  => '空にするとマーク自体を表示しない',
+				'label' => self::t( 'label_newmark_text' ),
+				'desc'  => self::t( 'desc_newmark_text' ),
 			),
 			'date_format'      => array(
 				'type'  => 'text',
-				'label' => '日付フォーマット',
-				'desc'  => '空欄で「設定 > 一般」の日付形式を使用(PHPのdate()書式)',
+				'label' => self::t( 'label_date_format' ),
+				'desc'  => self::t( 'desc_date_format' ),
 			),
 			'empty_text'       => array(
 				'type'  => 'text',
-				'label' => '0件時の表示文言',
-				'desc'  => '空にすると非表示',
+				'label' => self::t( 'label_empty_text' ),
+				'desc'  => self::t( 'desc_empty_text' ),
 			),
 			'custom_css'       => array(
 				'type'  => 'textarea',
-				'label' => 'カスタムCSS',
-				'desc'  => '同梱の ' . self::STYLE_HANDLE . '.css に追加で読み込まれる。NEW!マークや日付/タイトル/カテゴリ/タイプの並び方など、見た目全般をここで上書きできる(対象クラス: .whatsnew, .whatsnew-title, .whatsnew-item, .newmark, .whatsnew-type, .whatsnew-category 等)',
+				'label' => self::t( 'label_custom_css' ),
+				'desc'  => self::t( 'desc_custom_css' ),
+			),
+			'ui_language'      => array(
+				'type'    => 'select',
+				'label'   => self::t( 'label_ui_language' ),
+				'desc'    => self::t( 'desc_ui_language' ),
+				'choices' => array(
+					'auto' => self::t( 'choice_lang_auto' ),
+					'ja'   => self::t( 'choice_lang_ja' ),
+					'en'   => self::t( 'choice_lang_en' ),
+				),
 			),
 		);
 	}
@@ -270,7 +433,7 @@ final class AEM_WhatsNew {
 	 */
 	public static function add_settings_link( $links ) {
 		$url = admin_url( 'options-general.php?page=' . self::SETTINGS_SLUG );
-		array_unshift( $links, '<a href="' . esc_url( $url ) . '">設定</a>' );
+		array_unshift( $links, '<a href="' . esc_url( $url ) . '">' . esc_html( self::t( 'settings_link' ) ) . '</a>' );
 
 		return $links;
 	}
@@ -292,6 +455,7 @@ final class AEM_WhatsNew {
 		$out['show_type']        = ! empty( $input['show_type'] ) ? 'yes' : 'no';
 		$out['number']           = (string) min( 50, max( 1, absint( $input['number'] ?? 10 ) ) );
 		$out['orderby']          = ( isset( $input['orderby'] ) && 'modified' === $input['orderby'] ) ? 'modified' : 'date';
+		$out['layout']           = ( isset( $input['layout'] ) && 'inline' === $input['layout'] ) ? 'inline' : 'stacked';
 		$out['category']         = isset( $input['category'] ) ? sanitize_text_field( $input['category'] ) : '';
 		$out['show_category']    = ! empty( $input['show_category'] ) ? 'yes' : 'no';
 		$out['category_limit']   = (string) max( 0, absint( $input['category_limit'] ?? 3 ) );
@@ -299,10 +463,11 @@ final class AEM_WhatsNew {
 		$out['exclude_ids']      = isset( $input['exclude_ids'] ) ? sanitize_text_field( $input['exclude_ids'] ) : '';
 		$out['newmark_days']     = (string) max( 0, absint( $input['newmark_days'] ?? 30 ) );
 		$out['newmark_latest']   = ! empty( $input['newmark_latest'] ) ? 'yes' : 'no';
-		$out['newmark_text']     = isset( $input['newmark_text'] ) ? sanitize_text_field( $input['newmark_text'] ) : 'NEW!';
+		$out['newmark_text']     = isset( $input['newmark_text'] ) ? sanitize_text_field( $input['newmark_text'] ) : self::t( 'default_newmark_text' );
 		$out['date_format']      = isset( $input['date_format'] ) ? sanitize_text_field( $input['date_format'] ) : '';
 		$out['empty_text']       = isset( $input['empty_text'] ) ? sanitize_text_field( $input['empty_text'] ) : '';
 		$out['custom_css']       = isset( $input['custom_css'] ) ? sanitize_textarea_field( $input['custom_css'] ) : '';
+		$out['ui_language']      = in_array( $input['ui_language'] ?? '', array( 'ja', 'en' ), true ) ? $input['ui_language'] : 'auto';
 
 		return $out;
 	}
@@ -319,11 +484,8 @@ final class AEM_WhatsNew {
 		$options = self::defaults();
 		?>
 <div class="wrap">
-	<h1>AEM What's New — 設定</h1>
-	<p>
-		ここで指定した値は、ショートコード <code>[aem_whatsnew]</code> / <code>[showwhatsnew]</code> の既定値になります。
-		ショートコード側で属性を明示指定した場合は、そちらが優先されます。
-	</p>
+	<h1><?php echo esc_html( self::t( 'page_heading' ) ); ?></h1>
+	<p><?php echo esc_html( self::t( 'intro' ) ); ?></p>
 	<form method="post" action="options.php">
 		<?php settings_fields( self::SETTINGS_GROUP ); ?>
 		<table class="form-table" role="presentation">
@@ -344,8 +506,8 @@ final class AEM_WhatsNew {
 		<?php submit_button(); ?>
 	</form>
 
-	<h2>プレビュー</h2>
-	<p class="description">現在保存されている設定で <code>[aem_whatsnew]</code> を表示した場合の見た目です。</p>
+	<h2><?php echo esc_html( self::t( 'preview_heading' ) ); ?></h2>
+	<p class="description"><?php echo esc_html( self::t( 'preview_desc' ) ); ?></p>
 	<div style="max-width:480px;border:1px solid #ccd0d4;padding:12px;background:#fff;">
 		<?php echo self::render( array() ); // phpcs:ignore WordPress.Security.EscapeOutput -- render()内でエスケープ済み ?>
 	</div>
@@ -376,10 +538,11 @@ final class AEM_WhatsNew {
 
 			case 'checkbox':
 				printf(
-					'<label><input type="checkbox" id="%1$s" name="%2$s" value="1"%3$s /> 有効にする</label>',
+					'<label><input type="checkbox" id="%1$s" name="%2$s" value="1"%3$s /> %4$s</label>',
 					esc_attr( $id ),
 					esc_attr( $name ),
-					checked( 'yes', $value, false )
+					checked( 'yes', $value, false ),
+					esc_html( self::t( 'checkbox_enable' ) )
 				);
 				break;
 
@@ -440,6 +603,7 @@ final class AEM_WhatsNew {
 		$show_type      = self::is_truthy( $atts['show_type'] );
 		$show_category  = self::is_truthy( $atts['show_category'] );
 		$category_limit = max( 0, (int) $atts['category_limit'] );
+		$layout_inline  = ( 'inline' === $atts['layout'] );
 
 		$posts = self::query_posts( $atts, $orderby );
 
@@ -466,18 +630,38 @@ final class AEM_WhatsNew {
 					? get_the_modified_date( $date_format, $post )
 					: get_the_date( $date_format, $post );
 				$title     = self::truncate_title( get_the_title( $post ), $title_max_len );
+				$datetime  = $timestamp ? gmdate( 'c', $timestamp ) : '';
+
+				$title_markup = '';
+				if ( $is_new && '' !== trim( $newmark_text ) ) {
+					$title_markup .= '<span class="newmark">' . esc_html( $newmark_text ) . '</span> ';
+				}
+				$title_markup .= esc_html( $title );
 				?>
 	<a class="whatsnew-item" href="<?php echo esc_url( (string) get_permalink( $post ) ); ?>">
+			<?php if ( $layout_inline ) : ?>
+		<div class="whatsnew-row">
+			<span class="whatsnew-date"><time datetime="<?php echo esc_attr( $datetime ); ?>"><?php echo esc_html( $date_text ); ?></time></span>
+				<?php if ( $show_type ) : ?>
+			<span class="whatsnew-type"><?php echo esc_html( self::post_type_label( $post ) ); ?></span>
+				<?php endif; ?>
+				<?php if ( $show_category ) : ?>
+			<span class="whatsnew-category"><?php echo esc_html( self::category_names_for_post( $post, $category_limit ) ); ?></span>
+				<?php endif; ?>
+			<span class="whatsnew-item-title"><?php echo $title_markup; // phpcs:ignore WordPress.Security.EscapeOutput -- $title_markupは組み立て時にesc_html済み ?></span>
+		</div>
+			<?php else : ?>
 		<dl>
-			<dt><time datetime="<?php echo esc_attr( $timestamp ? gmdate( 'c', $timestamp ) : '' ); ?>"><?php echo esc_html( $date_text ); ?></time></dt>
-			<dd class="whatsnew-item-title"><?php if ( $is_new && '' !== trim( $newmark_text ) ) : ?><span class="newmark"><?php echo esc_html( $newmark_text ); ?></span> <?php endif; ?><?php echo esc_html( $title ); ?></dd>
-			<?php if ( $show_type ) : ?>
+			<dt><time datetime="<?php echo esc_attr( $datetime ); ?>"><?php echo esc_html( $date_text ); ?></time></dt>
+			<dd class="whatsnew-item-title"><?php echo $title_markup; // phpcs:ignore WordPress.Security.EscapeOutput -- $title_markupは組み立て時にesc_html済み ?></dd>
+				<?php if ( $show_type ) : ?>
 			<dd class="whatsnew-type"><?php echo esc_html( self::post_type_label( $post ) ); ?></dd>
-			<?php endif; ?>
-			<?php if ( $show_category ) : ?>
+				<?php endif; ?>
+				<?php if ( $show_category ) : ?>
 			<dd class="whatsnew-category"><?php echo esc_html( self::category_names_for_post( $post, $category_limit ) ); ?></dd>
-			<?php endif; ?>
+				<?php endif; ?>
 		</dl>
+			<?php endif; ?>
 	</a>
 	<hr />
 			<?php endforeach; ?>

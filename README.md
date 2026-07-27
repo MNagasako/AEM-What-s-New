@@ -118,11 +118,24 @@ WordPress標準API(`WP_Query` + ショートコードAPI)だけで実装され�
 | `newmark_text` | `NEW!` | 新着マークの文字列。空文字にするとマーク自体を表示しない |
 | `date_format` | (空="設定 > 一般"の日付フォーマット) | 日付の表示形式(PHPの`date()`書式) |
 | `empty_text` | `現在、新着情報はありません。` | 該当記事が0件のときの表示文言。空文字で非表示 |
+| `layout` | `stacked` | `stacked`(既定、日付の下にタイトル・タイプ・カテゴリを積み重ねて表示)または`inline`(日付・タイプ・カテゴリ・タイトルを横一列で表示) |
 
 `custom_css`(カスタムCSS)はページ単位ではなくサイト全体に効くため、ショートコード属性ではなく
 「設定 > AEM What's New」の管理画面からのみ編集する。同梱の`aem-whatsnew.css`に追加で読み込まれ、
-`.whatsnew` / `.whatsnew-item` / `.newmark` / `.whatsnew-type` / `.whatsnew-category` 等の
-クラスを対象に見た目を上書きできる。
+`.whatsnew` / `.whatsnew-item` / `.whatsnew-row`(`layout="inline"`時) / `.newmark` /
+`.whatsnew-type` / `.whatsnew-category` 等のクラスを対象に見た目を上書きできる。
+
+### 表示言語(管理画面・既定文言)
+
+設定画面の最後にある「管理画面・既定文言の表示言語」(`ui_language`)で、管理画面のラベルや
+`title`/`newmark_text`/`empty_text`の既定文言を日本語/英語で切り替えられる。
+
+- `auto`(既定): サイトの言語設定(`get_locale()`)が`ja`から始まるかどうかで自動判定
+- `ja` / `en`: サイトの言語設定に関わらず固定する
+
+.po/.moファイルによる翻訳ではなく、プラグイン内の文字列テーブルを直接切り替える方式にしてある
+(このプラグインはビルド手順を持たない設計のため)。WordPress公式ディレクトリへの登録を想定し、
+readme.txtは英語を主とし、末尾に日本語セクションを設けている。
 
 ### カテゴリ指定の仕組み(複数サイトでの再利用について)
 
