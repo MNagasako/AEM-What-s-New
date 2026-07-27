@@ -119,11 +119,26 @@ WordPress標準API(`WP_Query` + ショートコードAPI)だけで実装され�
 | `date_format` | (空="設定 > 一般"の日付フォーマット) | 日付の表示形式(PHPの`date()`書式) |
 | `empty_text` | `現在、新着情報はありません。` | 該当記事が0件のときの表示文言。空文字で非表示 |
 | `layout` | `stacked` | `stacked`(既定、日付の下にタイトル・タイプ・カテゴリを積み重ねて表示)または`inline`(日付・タイプ・カテゴリ・タイトルを横一列で表示) |
+| `pagination` | `no` | `yes`にするとページネーションを有効化し、`number`が1ページあたりの件数になる |
 
 `custom_css`(カスタムCSS)はページ単位ではなくサイト全体に効くため、ショートコード属性ではなく
 「設定 > AEM What's New」の管理画面からのみ編集する。同梱の`aem-whatsnew.css`に追加で読み込まれ、
 `.whatsnew` / `.whatsnew-item` / `.whatsnew-row`(`layout="inline"`時) / `.newmark` /
-`.whatsnew-type` / `.whatsnew-category` 等のクラスを対象に見た目を上書きできる。
+`.whatsnew-type` / `.whatsnew-category` / `.whatsnew-pagination`(`pagination="yes"`時) 等の
+クラスを対象に見た目を上書きできる。
+
+### ページネーション
+
+`pagination="yes"`を指定すると、URLに`?whatsnew_page=2`のようなクエリ引数を付けてページを
+切り替えられるようになる(`paginate_links()`で生成、現在ページのリンクは`<a>`ではなく
+`<span class="page-numbers current">`)。
+
+- WPの`paged`ではなく専用のクエリ引数`whatsnew_page`を使っている。アーカイブページや
+  投稿本文中の`<!--nextpage-->`分割など、既存のページ送りと衝突しないようにするため
+- 同じページに`[aem_whatsnew]`を複数回配置している場合、ページ番号はすべての配置で共有される
+  (配置ごとに独立したページ送りは意図的にサポートしていない)
+- 管理画面のプレビューでは、ブラウザ側から`?whatsnew_page=`を付けて再読み込みする手段がない
+  ため、常に1ページ目の見た目のみが確認できる(リンクの見た目自体は確認可能)
 
 ### 表示言語(管理画面・既定文言)
 

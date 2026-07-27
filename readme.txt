@@ -4,7 +4,7 @@ Tags: shortcode, whats-new, news, recent-posts, category
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -18,6 +18,7 @@ The `[aem_whatsnew]` shortcode displays a simple list of recent posts/pages, opt
 * The "NEW!" mark's duration, post types, and sort order (publish/modified date) are all configurable via shortcode attributes.
 * Optional category and post-type columns, a title character limit, a customizable "NEW!" mark string, and a custom-CSS box in the settings screen.
 * An optional single-line layout (date, type, category, and title in one row) in addition to the default stacked layout.
+* Optional pagination (`pagination="yes"`), using a dedicated `?whatsnew_page=N` query argument so it never collides with archive pagination or in-post `<!--nextpage-->` breaks.
 * A "Settings > AEM What's New" admin screen (with a live preview) lets you edit all of the above defaults without touching a shortcode. Explicit shortcode attributes always win over the saved settings.
 * The admin screen and the built-in default text (heading, "NEW!" mark, empty-state text) can be shown in Japanese or English, either automatically (based on the site's language) or forced manually.
 * Uses `WP_Query` (not `get_posts()` with filters suppressed), so plugins like User Access Manager that restrict post visibility are respected — restricted posts never leak into the list.
@@ -59,6 +60,9 @@ Yes. The "Admin screen & default text language" setting supports Auto (follows t
 
 == Changelog ==
 
+= 1.4.0 =
+* Added optional pagination (`pagination`: yes/no). When enabled, "Number of items" becomes the per-page count and the list can be paged via a dedicated `?whatsnew_page=N` query argument (not WordPress's own `paged`, to avoid colliding with archive pagination or `<!--nextpage-->`).
+
 = 1.3.0 =
 * Added a `layout` option: the default "stacked" layout, or a new "inline" layout that puts date/type/category/title on a single row.
 * Added a Japanese/English switch (`ui_language`: auto/ja/en) for the admin screen and the built-in default text.
@@ -81,6 +85,9 @@ Yes. The "Admin screen & default text language" setting supports Auto (follows t
 
 == Upgrade Notice ==
 
+= 1.4.0 =
+Adds optional pagination. Off by default — no visual change unless you opt in.
+
 = 1.3.0 =
 Adds an inline layout option and a Japanese/English display-language switch. No visual change unless you opt in.
 
@@ -100,7 +107,7 @@ Initial release.
 
 トップページ等に「新着情報」一覧を表示する軽量プラグイン。WordPress標準API(WP_Query + ショートコードAPI)だけで動作し、ビルド手順や外部ライブラリは不要です。
 
-`[aem_whatsnew]` ショートコードで、指定カテゴリの新着記事一覧をシンプルなリストとして表示します。対象/除外カテゴリはスラッグ・カテゴリ名・IDのいずれでも指定可能、`NEW!`マークの表示日数・投稿種別・並び順なども属性で調整できます。カテゴリ列・投稿タイプ列の追加表示、タイトルの文字数制限、`NEW!`マーク文言の変更、レイアウト(積み重ね/1行)の切り替え、カスタムCSSによる見た目の上書きにも対応しています。
+`[aem_whatsnew]` ショートコードで、指定カテゴリの新着記事一覧をシンプルなリストとして表示します。対象/除外カテゴリはスラッグ・カテゴリ名・IDのいずれでも指定可能、`NEW!`マークの表示日数・投稿種別・並び順なども属性で調整できます。カテゴリ列・投稿タイプ列の追加表示、タイトルの文字数制限、`NEW!`マーク文言の変更、レイアウト(積み重ね/1行)の切り替え、ページネーション(専用クエリ引数`?whatsnew_page=N`使用)、カスタムCSSによる見た目の上書きにも対応しています。
 
 「設定 > AEM What's New」の管理画面(プレビュー付き)から、ショートコードを書かずに既定値を編集できます(ショートコード属性を明示指定した場合はそちらが優先)。管理画面表示・既定文言は日本語/英語を自動または手動で切り替え可能です。
 

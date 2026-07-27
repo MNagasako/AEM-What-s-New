@@ -3,7 +3,7 @@
  * Plugin Name: AEM What's New
  * Plugin URI:  https://github.com/MNagasako/AEM-What-s-New
  * Description: 新着情報一覧をWordPress標準API(WP_Query + ショートコードAPI)だけで表示する。外部プラグイン「What's New Generator」の置き換え。
- * Version:     1.3.0
+ * Version:     1.4.0
  * Author:      分析電顕室
  * License:     GPL-2.0-or-later
  * Requires at least: 6.0
@@ -17,13 +17,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 final class AEM_WhatsNew {
 
-	const VERSION           = '1.3.0';
+	const VERSION           = '1.4.0';
 	const SHORTCODE         = 'aem_whatsnew';
 	const LEGACY_SHORTCODE  = 'showwhatsnew';
 	const STYLE_HANDLE      = 'aem-whatsnew';
 	const OPTION_NAME       = 'aem_whatsnew_options';
 	const SETTINGS_GROUP    = 'aem_whatsnew_group';
 	const SETTINGS_SLUG     = 'aem-whatsnew';
+	/** ページネーション有効時に使うURLクエリ引数名。WPの`paged`は既存のアーカイブ/投稿ページ分割と衝突するため専用の名前にしてある。 */
+	const PAGE_QUERY_VAR    = 'whatsnew_page';
 
 	/** 見出しに許可するタグ。これ以外が指定されたら p に落とす。 */
 	const ALLOWED_TITLE_TAGS = array( 'p', 'h2', 'h3', 'h4', 'h5', 'h6', 'div' );
@@ -100,6 +102,7 @@ final class AEM_WhatsNew {
 			'empty_text'       => self::t( 'default_empty_text' ),
 			'custom_css'       => '',                // 設定画面のみで編集。ショートコード属性としては扱わない
 			'ui_language'      => 'auto',             // auto | ja | en (管理画面表示と上記既定文言に使う)
+			'pagination'       => 'no',               // ページネーション(?whatsnew_page=N)を有効にするか
 		);
 	}
 
@@ -170,12 +173,14 @@ final class AEM_WhatsNew {
 				'label_empty_text'       => '0件時の表示文言',
 				'desc_empty_text'        => '空にすると非表示',
 				'label_custom_css'       => 'カスタムCSS',
-				'desc_custom_css'        => '同梱の aem-whatsnew.css に追加で読み込まれる。NEW!マークや日付/タイトル/カテゴリ/タイプの並び方など、見た目全般をここで上書きできる(対象クラス: .whatsnew, .whatsnew-title, .whatsnew-item, .whatsnew-row, .newmark, .whatsnew-type, .whatsnew-category 等)',
+				'desc_custom_css'        => '同梱の aem-whatsnew.css に追加で読み込まれる。NEW!マークや日付/タイトル/カテゴリ/タイプの並び方など、見た目全般をここで上書きできる(対象クラス: .whatsnew, .whatsnew-title, .whatsnew-item, .whatsnew-row, .newmark, .whatsnew-type, .whatsnew-category, .whatsnew-pagination 等)',
 				'label_ui_language'      => '管理画面・既定文言の表示言語',
 				'desc_ui_language'       => '「自動」はサイトの言語設定(ja/それ以外)に追従する',
 				'choice_lang_auto'       => '自動(サイトの言語設定に従う)',
 				'choice_lang_ja'         => '日本語',
 				'choice_lang_en'         => 'English',
+				'label_pagination'       => 'ページネーションを有効にする',
+				'desc_pagination'        => '有効にすると「表示件数」が1ページあたりの件数になり、URLに ?whatsnew_page=2 のように付けてページを切り替えられる(同一ページに複数配置している場合、ページ番号はすべての配置で共有される)',
 				'default_title'          => '新着情報',
 				'default_newmark_text'   => 'NEW!',
 				'default_empty_text'     => '現在、新着情報はありません。',
@@ -222,12 +227,14 @@ final class AEM_WhatsNew {
 				'label_empty_text'       => 'Empty-state text',
 				'desc_empty_text'        => 'Shown when there are no matching items. Leave empty to hide',
 				'label_custom_css'       => 'Custom CSS',
-				'desc_custom_css'        => 'Loaded in addition to the bundled aem-whatsnew.css. Use it to restyle anything, including the "NEW!" mark and the list layout (relevant classes: .whatsnew, .whatsnew-title, .whatsnew-item, .whatsnew-row, .newmark, .whatsnew-type, .whatsnew-category, etc.)',
+				'desc_custom_css'        => 'Loaded in addition to the bundled aem-whatsnew.css. Use it to restyle anything, including the "NEW!" mark and the list layout (relevant classes: .whatsnew, .whatsnew-title, .whatsnew-item, .whatsnew-row, .newmark, .whatsnew-type, .whatsnew-category, .whatsnew-pagination, etc.)',
 				'label_ui_language'      => 'Admin screen & default text language',
 				'desc_ui_language'       => '"Auto" follows the site\'s language setting (Japanese vs. everything else)',
 				'choice_lang_auto'       => 'Auto (follow site language)',
 				'choice_lang_ja'         => '日本語 (Japanese)',
 				'choice_lang_en'         => 'English',
+				'label_pagination'       => 'Enable pagination',
+				'desc_pagination'        => 'When enabled, "Number of items" becomes the per-page count, and the list can be paged via ?whatsnew_page=2 in the URL (the page number is shared across all instances if you place the shortcode more than once on the same page)',
 				'default_title'          => 'What\'s New',
 				'default_newmark_text'   => 'NEW!',
 				'default_empty_text'     => 'No new updates at this time.',
@@ -294,6 +301,11 @@ final class AEM_WhatsNew {
 				'label' => self::t( 'label_number' ),
 				'min'   => 1,
 				'max'   => 50,
+			),
+			'pagination'       => array(
+				'type'  => 'checkbox',
+				'label' => self::t( 'label_pagination' ),
+				'desc'  => self::t( 'desc_pagination' ),
 			),
 			'orderby'          => array(
 				'type'    => 'select',
@@ -454,6 +466,7 @@ final class AEM_WhatsNew {
 		$out['post_type']        = ! empty( $valid_post_types ) ? implode( ',', $valid_post_types ) : 'post';
 		$out['show_type']        = ! empty( $input['show_type'] ) ? 'yes' : 'no';
 		$out['number']           = (string) min( 50, max( 1, absint( $input['number'] ?? 10 ) ) );
+		$out['pagination']      = ! empty( $input['pagination'] ) ? 'yes' : 'no';
 		$out['orderby']          = ( isset( $input['orderby'] ) && 'modified' === $input['orderby'] ) ? 'modified' : 'date';
 		$out['layout']           = ( isset( $input['layout'] ) && 'inline' === $input['layout'] ) ? 'inline' : 'stacked';
 		$out['category']         = isset( $input['category'] ) ? sanitize_text_field( $input['category'] ) : '';
@@ -604,8 +617,12 @@ final class AEM_WhatsNew {
 		$show_category  = self::is_truthy( $atts['show_category'] );
 		$category_limit = max( 0, (int) $atts['category_limit'] );
 		$layout_inline  = ( 'inline' === $atts['layout'] );
+		$paginate       = self::is_truthy( $atts['pagination'] );
+		$current_page   = $paginate ? self::current_page() : 1;
 
-		$posts = self::query_posts( $atts, $orderby );
+		$query     = self::query_posts( $atts, $orderby, $current_page, $paginate );
+		$posts     = $query->posts;
+		$max_pages = $paginate ? (int) $query->max_num_pages : 1;
 
 		wp_enqueue_style( self::STYLE_HANDLE );
 		self::ensure_custom_css();
@@ -666,6 +683,9 @@ final class AEM_WhatsNew {
 	<hr />
 			<?php endforeach; ?>
 		<?php endif; ?>
+		<?php if ( $paginate ) : ?>
+	<?php echo self::render_pagination( $current_page, $max_pages ); // phpcs:ignore WordPress.Security.EscapeOutput -- render_pagination()内でpaginate_links()がエスケープ済み ?>
+		<?php endif; ?>
 </div>
 		<?php
 		return (string) ob_get_clean();
@@ -678,17 +698,19 @@ final class AEM_WhatsNew {
 	 * User Access Manager等の閲覧制限フィルタが効いていなかった。ここではWP_Queryを
 	 * 使うので、制限対象の記事は閲覧権限のない利用者には出ない。
 	 *
-	 * @return WP_Post[]
+	 * @return WP_Query
 	 */
-	private static function query_posts( array $atts, $orderby ) {
+	private static function query_posts( array $atts, $orderby, $paged, $paginate ) {
 		$args = array(
 			'post_type'           => self::parse_post_types( $atts['post_type'] ),
 			'post_status'         => 'publish',
 			'posts_per_page'      => min( 50, max( 1, (int) $atts['number'] ) ),
+			'paged'               => max( 1, (int) $paged ),
 			'orderby'             => $orderby,
 			'order'               => 'DESC',
 			'ignore_sticky_posts' => true,
-			'no_found_rows'       => true,
+			// ページネーション有効時のみtotal件数(max_num_pages)が必要になるため計算させる。
+			'no_found_rows'       => ! $paginate,
 			'update_post_meta_cache' => false,
 			// カテゴリ列を表示する場合はget_the_category()がpost毎にDBを叩かないよう事前キャッシュする。
 			'update_post_term_cache' => self::is_truthy( $atts['show_category'] ?? 'no' ),
@@ -738,9 +760,45 @@ final class AEM_WhatsNew {
 		 */
 		$args = apply_filters( 'aem_whatsnew_query_args', $args, $atts );
 
-		$query = new WP_Query( $args );
+		return new WP_Query( $args );
+	}
 
-		return $query->posts;
+	/**
+	 * ページネーション用の現在ページ番号($_GET[self::PAGE_QUERY_VAR])。1未満は1に丸める。
+	 */
+	private static function current_page() {
+		$page = isset( $_GET[ self::PAGE_QUERY_VAR ] ) ? absint( wp_unslash( $_GET[ self::PAGE_QUERY_VAR ] ) ) : 1; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- ページ送りの読み取りのみで状態変更を伴わない
+
+		return max( 1, $page );
+	}
+
+	/**
+	 * ページネーションのリンク一覧をHTMLで返す(1ページしかない場合は空文字)。
+	 */
+	private static function render_pagination( $current_page, $max_pages ) {
+		$max_pages = (int) $max_pages;
+		if ( $max_pages <= 1 ) {
+			return '';
+		}
+
+		$base  = add_query_arg( self::PAGE_QUERY_VAR, '%#%' );
+		$links = paginate_links(
+			array(
+				'base'      => $base,
+				'format'    => '',
+				'current'   => $current_page,
+				'total'     => $max_pages,
+				'type'      => 'plain',
+				'prev_text' => '‹',
+				'next_text' => '›',
+			)
+		);
+
+		if ( ! $links ) {
+			return '';
+		}
+
+		return '<nav class="whatsnew-pagination" aria-label="Pagination">' . $links . '</nav>';
 	}
 
 	/**
