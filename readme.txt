@@ -4,7 +4,7 @@ Tags: shortcode, whats-new, news, recent-posts, category
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.5.0
+Stable tag: 1.5.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -19,7 +19,8 @@ The `[aem_whatsnew]` shortcode displays a simple list of recent posts/pages, opt
 * Optional category and post-type columns, a title character limit, a customizable "NEW!" mark string, and a custom-CSS box in the settings screen.
 * An optional single-line layout (date, type, category, and title in one row) in addition to the default stacked layout.
 * Optional pagination (`pagination="yes"`), using a dedicated `?whatsnew_page=N` query argument so it never collides with archive pagination or in-post `<!--nextpage-->` breaks. Choose sync (normal links) or async (in-place Ajax update) mode, a numbered/prev-next/"load more" style, a bottom-left/bottom-right/top-right position, and optionally cap the total number of items reachable via pagination.
-* Optional date-range filtering (`date_from` / `date_to`) and a Japanese-era ("wareki") date format option (`date_format="wareki"`, e.g. "令和7年7月27日").
+* Optional date-range filtering (`date_from` / `date_to`) and Japanese-era ("wareki") date format options: full date (`date_format="wareki"`, e.g. "令和7年7月27日") or era+year only, in three numbering styles (`wareki_year` → "令和元"/"令和7", `wareki_year_numeric` → "令和1"/"令和7", `wareki_year_02d` → "令和01"/"令和07").
+* Async pagination prefetches and caches the next page (and any page you hover or focus) so revisited or anticipated pages display instantly without another round trip.
 * A "Settings > AEM What's New" admin screen (with a live preview) lets you edit all of the above defaults without touching a shortcode. Explicit shortcode attributes always win over the saved settings.
 * The admin screen and the built-in default text (heading, "NEW!" mark, empty-state text) can be shown in Japanese or English, either automatically (based on the site's language) or forced manually.
 * Uses `WP_Query` (not `get_posts()` with filters suppressed), so plugins like User Access Manager that restrict post visibility are respected — restricted posts never leak into the list.
@@ -61,13 +62,23 @@ Yes. The "Admin screen & default text language" setting supports Auto (follows t
 
 = Can I show dates in the Japanese era (wareki) format? =
 
-Yes. Set `date_format="wareki"` (or the same value in the settings screen) to render dates like "令和7年7月27日" instead of a PHP `date()` pattern. All eras from Meiji onward are supported.
+Yes. Set `date_format="wareki"` (or the same value in the settings screen) to render dates like "令和7年7月27日" instead of a PHP `date()` pattern. All eras from Meiji onward are supported. Three era+year-only variants are also available: `wareki_year` ("令和元"/"令和7"), `wareki_year_numeric` ("令和1"/"令和7"), and `wareki_year_02d` ("令和01"/"令和07").
 
 = Does pagination require JavaScript? =
 
 Only if you set `pagination_mode="async"`. The default, `sync`, uses normal link navigation and works without JavaScript. Async mode loads a small bundled script (`aem-whatsnew.js`, no build step) and updates the list in place via `admin-ajax.php`.
 
 == Changelog ==
+
+= 1.5.3 =
+* Fixed: text after a wareki keyword is now evaluated as a PHP `date()` format against the post's timestamp, instead of being appended as literal text — `date_format="wareki_year_02d年n月j日"` now renders e.g. "令和08年7月27日" (month/day tokens are substituted, not left as-is).
+
+= 1.5.2 =
+* Fixed: appending literal text right after a wareki keyword (e.g. `wareki_year_02d年`) was previously ignored — it now matches the keyword by prefix and appends the trailing text as-is (e.g. "令和07年").
+
+= 1.5.1 =
+* Async pagination now prefetches and caches the next page ahead of time (idle-time), plus any page you hover or focus, and reuses the cache instead of re-fetching pages you've already viewed.
+* Added three era+year-only wareki date formats (`wareki_year`, `wareki_year_numeric`, `wareki_year_02d`) alongside the existing full-date `wareki`.
 
 = 1.5.0 =
 * Added pagination mode (`pagination_mode`: sync/async), style (`pagination_style`: numbers/prev_next/load_more), and position (`pagination_position`: bottom-left/bottom-right/top-right-next-to-heading).
@@ -100,6 +111,15 @@ Only if you set `pagination_mode="async"`. The default, `sync`, uses normal link
 
 == Upgrade Notice ==
 
+= 1.5.3 =
+Fixes wareki keyword suffixes so date() tokens (month/day, etc.) after the keyword are substituted correctly instead of shown literally.
+
+= 1.5.2 =
+Fixes wareki keywords with trailing literal text (e.g. `wareki_year_02d年`), which previously rendered incorrectly.
+
+= 1.5.1 =
+Async pagination now prefetches/caches pages; adds three more wareki date format options. No visual change unless you opt in.
+
 = 1.5.0 =
 Adds pagination mode/style/position, an item cap, date-range filtering, and a Japanese-era date format. No visual change unless you opt in.
 
@@ -125,9 +145,9 @@ Initial release.
 
 トップページ等に「新着情報」一覧を表示する軽量プラグイン。WordPress標準API(WP_Query + ショートコードAPI)だけで動作し、ビルド手順や外部ライブラリは不要です。
 
-`[aem_whatsnew]` ショートコードで、指定カテゴリの新着記事一覧をシンプルなリストとして表示します。対象/除外カテゴリはスラッグ・カテゴリ名・IDのいずれでも指定可能、`NEW!`マークの表示日数・投稿種別・並び順・期間(開始日/終了日)なども属性で調整できます。カテゴリ列・投稿タイプ列の追加表示、タイトルの文字数制限、`NEW!`マーク文言の変更、レイアウト(積み重ね/1行)の切り替え、和暦表示(`date_format="wareki"`)、カスタムCSSによる見た目の上書きにも対応しています。
+`[aem_whatsnew]` ショートコードで、指定カテゴリの新着記事一覧をシンプルなリストとして表示します。対象/除外カテゴリはスラッグ・カテゴリ名・IDのいずれでも指定可能、`NEW!`マークの表示日数・投稿種別・並び順・期間(開始日/終了日)なども属性で調整できます。カテゴリ列・投稿タイプ列の追加表示、タイトルの文字数制限、`NEW!`マーク文言の変更、レイアウト(積み重ね/1行)の切り替え、和暦表示(`wareki`=年月日、`wareki_year`/`wareki_year_numeric`/`wareki_year_02d`=元号年のみ)、カスタムCSSによる見た目の上書きにも対応しています。
 
-ページネーション(専用クエリ引数`?whatsnew_page=N`使用)は、方式(同期/非同期Ajax)・スタイル(番号付き/前へ次へのみ/もっと見るボタン)・表示位置(一覧の下・左右/見出しの右端)・件数上限を組み合わせて設定できます。
+ページネーション(専用クエリ引数`?whatsnew_page=N`使用)は、方式(同期/非同期Ajax)・スタイル(番号付き/前へ次へのみ/もっと見るボタン)・表示位置(一覧の下・左右/見出しの右端)・件数上限を組み合わせて設定できます。非同期方式では次ページの先読みキャッシュ(アイドル時・ホバー時)も行い、一度取得したページは再度Ajaxを発行せず即時表示します。
 
 「設定 > AEM What's New」の管理画面(プレビュー付き)から、ショートコードを書かずに既定値を編集できます(ショートコード属性を明示指定した場合はそちらが優先)。管理画面表示・既定文言は日本語/英語を自動または手動で切り替え可能です。
 

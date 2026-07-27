@@ -3,7 +3,7 @@
  * Plugin Name: AEM What's New
  * Plugin URI:  https://github.com/MNagasako/AEM-What-s-New
  * Description: 新着情報一覧をWordPress標準API(WP_Query + ショートコードAPI)だけで表示する。外部プラグイン「What's New Generator」の置き換え。
- * Version:     1.5.0
+ * Version:     1.5.3
  * Author:      分析電顕室
  * License:     GPL-2.0-or-later
  * Requires at least: 6.0
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 final class AEM_WhatsNew {
 
-	const VERSION           = '1.5.0';
+	const VERSION           = '1.5.3';
 	const SHORTCODE         = 'aem_whatsnew';
 	const LEGACY_SHORTCODE  = 'showwhatsnew';
 	const STYLE_HANDLE      = 'aem-whatsnew';
@@ -207,7 +207,7 @@ final class AEM_WhatsNew {
 				'label_newmark_text'     => 'NEW!マークの文字列',
 				'desc_newmark_text'      => '空にするとマーク自体を表示しない',
 				'label_date_format'      => '日付フォーマット',
-				'desc_date_format'       => '空欄で「設定 > 一般」の日付形式を使用(PHPのdate()書式)。特別な値 wareki を指定すると「令和7年7月27日」のような和暦表示になる(明治以降の元号に対応)',
+				'desc_date_format'       => '空欄で「設定 > 一般」の日付形式を使用(PHPのdate()書式)。和暦表示用の特別な値も指定できる(明治以降の元号に対応): wareki=令和7年7月27日、wareki_year=令和元/令和7、wareki_year_numeric=令和1/令和7、wareki_year_02d=令和01/令和07。これらのキーワードの直後に続けた文字はdate()書式として評価される(例: wareki_year_02d年 → 令和07年、wareki_year年n月j日 → 令和7年7月27日)',
 				'label_empty_text'       => '0件時の表示文言',
 				'desc_empty_text'        => '空にすると非表示',
 				'label_custom_css'       => 'カスタムCSS',
@@ -220,7 +220,7 @@ final class AEM_WhatsNew {
 				'label_pagination'       => 'ページネーションを有効にする',
 				'desc_pagination'        => '有効にすると「表示件数」が1ページあたりの件数になり、URLに ?whatsnew_page=2 のように付けてページを切り替えられる(同一ページに複数配置している場合、ページ番号はすべての配置で共有される)',
 				'label_pagination_mode'  => 'ページ切り替えの方式',
-				'desc_pagination_mode'   => '「非同期」はJavaScriptでその場更新(ページ全体の再読み込みなし)、「同期」は通常のリンク遷移',
+				'desc_pagination_mode'   => '「非同期」はJavaScriptでその場更新(ページ全体の再読み込みなし)、「同期」は通常のリンク遷移。非同期では次ページの先読みキャッシュも行う(表示済みページ・リンクへのホバー先読み分はAjax再取得なしで即表示)',
 				'choice_pagination_mode_sync'  => '同期(通常のリンク遷移)',
 				'choice_pagination_mode_async' => '非同期(Ajaxでその場更新)',
 				'label_pagination_style' => 'ページネーションのスタイル',
@@ -284,7 +284,7 @@ final class AEM_WhatsNew {
 				'label_newmark_text'     => '"NEW!" mark text',
 				'desc_newmark_text'      => 'Leave empty to hide the mark entirely',
 				'label_date_format'      => 'Date format',
-				'desc_date_format'       => "Leave empty to use the site's Settings > General date format (PHP date() syntax). The special value \"wareki\" renders the Japanese era calendar instead (e.g. \"令和7年7月27日\"), supporting all eras from Meiji onward",
+				'desc_date_format'       => "Leave empty to use the site's Settings > General date format (PHP date() syntax). Special values render the Japanese era calendar instead (all eras from Meiji onward): wareki=令和7年7月27日, wareki_year=令和元/令和7, wareki_year_numeric=令和1/令和7, wareki_year_02d=令和01/令和07. Any text right after one of these keywords is evaluated as a PHP date() format (e.g. wareki_year_02d年 → 令和07年, wareki_year年n月j日 → 令和7年7月27日)",
 				'label_empty_text'       => 'Empty-state text',
 				'desc_empty_text'        => 'Shown when there are no matching items. Leave empty to hide',
 				'label_custom_css'       => 'Custom CSS',
@@ -297,7 +297,7 @@ final class AEM_WhatsNew {
 				'label_pagination'       => 'Enable pagination',
 				'desc_pagination'        => 'When enabled, "Number of items" becomes the per-page count, and the list can be paged via ?whatsnew_page=2 in the URL (the page number is shared across all instances if you place the shortcode more than once on the same page)',
 				'label_pagination_mode'  => 'Pagination mode',
-				'desc_pagination_mode'   => '"Async" updates the list in place via JavaScript (no full page reload); "Sync" is a normal link navigation',
+				'desc_pagination_mode'   => '"Async" updates the list in place via JavaScript (no full page reload); "Sync" is a normal link navigation. Async also prefetches and caches the next page (and any page you hover/focus), so already-fetched pages display instantly without another Ajax round trip',
 				'choice_pagination_mode_sync'  => 'Sync (normal link navigation)',
 				'choice_pagination_mode_async' => 'Async (in-place update via Ajax)',
 				'label_pagination_style' => 'Pagination style',
@@ -590,6 +590,10 @@ final class AEM_WhatsNew {
 	 * 期限切れになりAjaxが失敗し続ける、という別の不具合を生みやすいため)。
 	 * 送信された$attsはrender()内部のshortcode_atts()・各種min/max制限を必ず経由するため、
 	 * クライアントから任意の値を渡されても安全側に丸められる。
+	 *
+	 * aem-whatsnew.js側の先読み(プリフェッチ)・ホバー先読みも同じこのエンドポイントを叩く
+	 * (表示に使うか、クライアント側キャッシュに保持するだけかはJS側の判断で、サーバー側の
+	 * 処理はクリック時と変わらない)。
 	 */
 	public static function ajax_paginate() {
 		$atts = array();
@@ -783,7 +787,26 @@ final class AEM_WhatsNew {
 		$title_max_len   = max( 0, (int) $atts['title_max_length'] );
 		$orderby         = ( 'modified' === $atts['orderby'] ) ? 'modified' : 'date';
 		$date_field      = ( 'modified' === $orderby ) ? 'modified' : 'date';
-		$use_wareki      = ( 'wareki' === $atts['date_format'] );
+		// wareki: 令和7年7月27日(年月日) / wareki_year 系: 年のみ(後述のwareki_year_only()参照)。
+		// キーワードは前方一致で検出し、続く文字列(例: "年"、"年度")があればそのまま末尾に
+		// 付与する(例: date_format="wareki_year_02d年" → "令和07年")。判定順は誤マッチを
+		// 避けるため、より長く具体的なキーワードから先にチェックする。
+		$wareki_prefixes = array(
+			'wareki_year_numeric' => 'numeric',
+			'wareki_year_02d'     => '02d',
+			'wareki_year'         => 'gan',
+			'wareki'              => 'full',
+		);
+		$wareki_style    = null;
+		$wareki_suffix   = '';
+		foreach ( $wareki_prefixes as $prefix => $style ) {
+			if ( 0 === strpos( $atts['date_format'], $prefix ) ) {
+				$wareki_style  = $style;
+				$wareki_suffix = substr( $atts['date_format'], strlen( $prefix ) );
+				break;
+			}
+		}
+		$use_wareki      = ( null !== $wareki_style );
 		$date_format     = ( '' !== $atts['date_format'] && ! $use_wareki ) ? $atts['date_format'] : get_option( 'date_format' );
 		$newmark_days    = max( 0, (int) $atts['newmark_days'] );
 		$mark_latest     = self::is_truthy( $atts['newmark_latest'] );
@@ -836,7 +859,12 @@ final class AEM_WhatsNew {
 		if ( $paginate && 'async' === $pagination_mode ) {
 			$atts_for_js = $atts;
 			unset( $atts_for_js['custom_css'] ); // サイト全体設定であり、かつ長文になり得るためJS側には送らない。
-			$async_attrs = ' data-aem-whatsnew-async="1" data-aem-whatsnew-atts="' . esc_attr( (string) wp_json_encode( $atts_for_js ) ) . '"';
+			$async_attrs  = ' data-aem-whatsnew-async="1"';
+			$async_attrs .= ' data-aem-whatsnew-atts="' . esc_attr( (string) wp_json_encode( $atts_for_js ) ) . '"';
+			// JS側が現在ページ・総ページ数をリンクのhrefを解析せず把握できるようにしておく。
+			// 「次ページの先読み(プリフェッチ)キャッシュ」の起点として使う。
+			$async_attrs .= ' data-aem-whatsnew-page="' . (int) $current_page . '"';
+			$async_attrs .= ' data-aem-whatsnew-max-pages="' . (int) $max_pages . '"';
 		}
 
 		ob_start();
@@ -864,7 +892,14 @@ final class AEM_WhatsNew {
 				$timestamp = get_post_timestamp( $post, $date_field );
 				$is_new    = self::is_new( $index, $timestamp, $newmark_days, $mark_latest );
 				if ( $use_wareki ) {
-					$date_text = self::wareki_date( $timestamp );
+					$date_text = ( 'full' === $wareki_style )
+						? self::wareki_date( $timestamp )
+						: self::wareki_year_only( $timestamp, $wareki_style );
+					// 接尾辞はリテラルではなく、通常のdate()書式として投稿のタイムスタンプで評価する
+					// (例: "wareki_year_02d年n月j日" → 令和07年 + "年n月j日"をwp_date()で展開)。
+					if ( $timestamp && '' !== $wareki_suffix ) {
+						$date_text .= wp_date( $wareki_suffix, $timestamp );
+					}
 				} else {
 					$date_text = ( 'modified' === $date_field )
 						? get_the_modified_date( $date_format, $post )
@@ -1259,29 +1294,78 @@ final class AEM_WhatsNew {
 	}
 
 	/**
-	 * date_format="wareki"指定時に使う、和暦表示(例: 令和7年7月27日)。
-	 * サイトのタイムゾーン設定に合わせるため、gmdate()ではなくwp_date()で年月日を取り出す。
+	 * タイムスタンプが属する元号名・元号年(1始まり)を返す。明治より前は該当なし(null)。
+	 * サイトのタイムゾーン設定に合わせるため、gmdate()ではなくwp_date()で年を取り出す。
+	 *
+	 * @return array{name: string, year: int}|null
+	 */
+	private static function wareki_era_year( $timestamp ) {
+		$year = (int) wp_date( 'Y', $timestamp );
+
+		foreach ( self::wareki_eras() as $era ) {
+			if ( $timestamp >= $era['start'] ) {
+				return array(
+					'name' => $era['name'],
+					'year' => $year - (int) wp_date( 'Y', $era['start'] ) + 1,
+				);
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * date_format="wareki"指定時に使う、和暦の年月日表示(例: 令和7年7月27日、元年は「令和元年」)。
 	 */
 	private static function wareki_date( $timestamp ) {
 		if ( ! $timestamp ) {
 			return '';
 		}
 
-		$year  = (int) wp_date( 'Y', $timestamp );
 		$month = (int) wp_date( 'n', $timestamp );
 		$day   = (int) wp_date( 'j', $timestamp );
+		$era   = self::wareki_era_year( $timestamp );
 
-		foreach ( self::wareki_eras() as $era ) {
-			if ( $timestamp >= $era['start'] ) {
-				$era_year = $year - (int) wp_date( 'Y', $era['start'] ) + 1;
-				$era_year_label = ( 1 === $era_year ) ? '元' : (string) $era_year;
-
-				return $era['name'] . $era_year_label . '年' . $month . '月' . $day . '日';
-			}
+		if ( null === $era ) {
+			// 明治より前(1868-01-25より前)は元号を特定せず西暦のみで表示する。
+			return wp_date( 'Y', $timestamp ) . '年' . $month . '月' . $day . '日';
 		}
 
-		// 明治より前(1868-01-25より前)は元号を特定せず西暦のみで表示する。
-		return $year . '年' . $month . '月' . $day . '日';
+		$year_label = ( 1 === $era['year'] ) ? '元' : (string) $era['year'];
+
+		return $era['name'] . $year_label . '年' . $month . '月' . $day . '日';
+	}
+
+	/**
+	 * date_format="wareki_year"系で使う、和暦の元号+年のみの表示(「年」は付けない)。
+	 *
+	 * $style:
+	 * - 'gan'     : 元年は「元」、それ以外は算用数字(例: 令和元, 令和7)
+	 * - 'numeric' : 元年も含め常に算用数字(例: 令和1, 令和7)
+	 * - '02d'     : 常に算用数字を2桁ゼロ埋め(例: 令和01, 令和07)
+	 */
+	private static function wareki_year_only( $timestamp, $style ) {
+		if ( ! $timestamp ) {
+			return '';
+		}
+
+		$era = self::wareki_era_year( $timestamp );
+		if ( null === $era ) {
+			return (string) wp_date( 'Y', $timestamp );
+		}
+
+		switch ( $style ) {
+			case '02d':
+				$year_label = sprintf( '%02d', $era['year'] );
+				break;
+			case 'numeric':
+				$year_label = (string) $era['year'];
+				break;
+			default: // 'gan'
+				$year_label = ( 1 === $era['year'] ) ? '元' : (string) $era['year'];
+		}
+
+		return $era['name'] . $year_label;
 	}
 
 	/**
