@@ -37,10 +37,9 @@ WordPress標準API(`WP_Query` + ショートコードAPI)だけで実装され�
 
 ## インストール
 
-1. このリポジトリを `wp-content/plugins/aem-whatsnew/` としてWordPressに配置する
-   (ディレクトリ名・メインファイル名 `aem-whatsnew.php` は変更しないこと。過去に別名の
-   「What's New Generator」を使っていた場合、ショートコード名の競合を避けるための
-   判定に使われるため)
+1. WordPress.org からインストールする場合は、管理画面の「プラグインを追加」から配布ZIPを選択する。
+   手動配置の場合は、`whats-new-list-by-m-n` フォルダーを `wp-content/plugins/` に配置する
+   (メインファイル名 `aem-whatsnew.php` はそのまま使う)
 2. 管理画面の「プラグイン」から **What's New List by M.N.** を有効化する
 3. 表示したいページ/投稿に `[aem_whatsnew]` を挿入する
 

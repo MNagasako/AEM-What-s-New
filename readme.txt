@@ -4,7 +4,7 @@ Tags: shortcode, whats-new, news, recent-posts, category
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.5.9
+Stable tag: 1.5.10
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -69,6 +69,9 @@ Only if you set `pagination_mode="async"`. The default, `sync`, uses normal link
 
 == Changelog ==
 
+= 1.5.10 =
+* Aligned the plugin text domain with the WordPress.org directory slug.
+
 = 1.5.9 =
 * Renamed the public plugin title to What's New List by M.N. to avoid ambiguity with unrelated products and trademarks.
 
@@ -130,6 +133,9 @@ Only if you set `pagination_mode="async"`. The default, `sync`, uses normal link
 * Initial release. Packaged from the version already running in production on the Institute for Materials Research (Tohoku University) AEM/analytical electron microscopy site, as a replacement for the external "What's New Generator" plugin.
 
 == Upgrade Notice ==
+
+= 1.5.10 =
+Aligns the plugin text domain with the WordPress.org directory slug.
 
 = 1.5.9 =
 Renames the public plugin title to What's New List by M.N.

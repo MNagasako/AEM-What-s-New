@@ -3,12 +3,12 @@
  * Plugin Name: What's New List by M.N.
  * Plugin URI:  https://github.com/MNagasako/AEM-What-s-New
  * Description: 新着情報一覧をWordPress標準API(WP_Query + ショートコードAPI)だけで表示する。外部プラグイン「What's New Generator」の置き換え。
- * Version:     1.5.9
+ * Version:     1.5.10
  * Author:      M.N.
  * License:     GPL-2.0-or-later
  * Requires at least: 6.0
  * Requires PHP: 7.4
- * Text Domain: aem-whatsnew
+ * Text Domain: whats-new-list-by-m-n
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 final class AEM_WhatsNew {
 
-	const VERSION           = '1.5.9';
+	const VERSION           = '1.5.10';
 	const SHORTCODE         = 'aem_whatsnew';
 	const LEGACY_SHORTCODE  = 'showwhatsnew';
 	const STYLE_HANDLE      = 'aem-whatsnew';
