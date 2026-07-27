@@ -3,7 +3,7 @@
  * Plugin Name: AEM What's New
  * Plugin URI:  https://github.com/MNagasako/AEM-What-s-New
  * Description: 新着情報一覧をWordPress標準API(WP_Query + ショートコードAPI)だけで表示する。外部プラグイン「What's New Generator」の置き換え。
- * Version:     1.5.3
+ * Version:     1.5.6
  * Author:      分析電顕室
  * License:     GPL-2.0-or-later
  * Requires at least: 6.0
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 final class AEM_WhatsNew {
 
-	const VERSION           = '1.5.3';
+	const VERSION           = '1.5.6';
 	const SHORTCODE         = 'aem_whatsnew';
 	const LEGACY_SHORTCODE  = 'showwhatsnew';
 	const STYLE_HANDLE      = 'aem-whatsnew';
@@ -26,6 +26,9 @@ final class AEM_WhatsNew {
 	const SETTINGS_SLUG     = 'aem-whatsnew';
 	const SCRIPT_HANDLE     = 'aem-whatsnew';
 	const AJAX_ACTION       = 'aem_whatsnew_paginate';
+	const MAX_AJAX_ATTS_BYTES = 4096;
+	const MAX_AJAX_ATTRIBUTE_BYTES = 512;
+	const MAX_LIST_VALUES = 50;
 	/** ページネーション有効時に使うURLクエリ引数名。WPの`paged`は既存のアーカイブ/投稿ページ分割と衝突するため専用の名前にしてある。 */
 	const PAGE_QUERY_VAR    = 'whatsnew_page';
 
@@ -80,7 +83,6 @@ final class AEM_WhatsNew {
 			&& ( has_shortcode( $post->post_content, self::SHORTCODE )
 				|| has_shortcode( $post->post_content, self::LEGACY_SHORTCODE ) ) ) {
 			wp_enqueue_style( self::STYLE_HANDLE );
-			wp_enqueue_script( self::SCRIPT_HANDLE );
 		}
 	}
 
@@ -596,16 +598,53 @@ final class AEM_WhatsNew {
 	 * 処理はクリック時と変わらない)。
 	 */
 	public static function ajax_paginate() {
-		$atts = array();
-		if ( isset( $_POST['atts'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用・公開データのみ返すため上記コメントの理由でnonce必須にしていない
-			$decoded = json_decode( (string) wp_unslash( $_POST['atts'] ), true );
-			if ( is_array( $decoded ) ) {
-				$atts = $decoded;
-			}
-		}
+		$atts = self::ajax_atts_from_request();
 		$page = isset( $_POST['page'] ) ? absint( $_POST['page'] ) : 1; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$incremental_load_more = isset( $_POST['incremental_load_more'] ) && '1' === $_POST['incremental_load_more']; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
 
-		wp_send_json_success( array( 'html' => self::render( $atts, max( 1, $page ) ) ) );
+		wp_send_json_success( array( 'html' => self::render_list( $atts, max( 1, $page ), $incremental_load_more ) ) );
+	}
+
+	/**
+	 * 公開Ajaxへ渡された属性を、既知の短いスカラー値だけに限定する。
+	 * nonceは公開ページに埋め込めないため使わないが、任意の巨大なカテゴリ指定で
+	 * カテゴリ解決クエリを増幅させないよう、入力サイズと型はここで厳密に制限する。
+	 *
+	 * @return array<string, string>
+	 */
+	private static function ajax_atts_from_request() {
+		if ( ! isset( $_POST['atts'] ) || ! is_string( $_POST['atts'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
+			wp_send_json_error( array( 'message' => 'Invalid attributes.' ), 400 );
+		}
+
+		$raw = wp_unslash( $_POST['atts'] ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
+		if ( ! is_string( $raw ) || strlen( $raw ) > self::MAX_AJAX_ATTS_BYTES ) {
+			wp_send_json_error( array( 'message' => 'Attributes are too large.' ), 400 );
+		}
+
+		$decoded = json_decode( $raw, true, 10 );
+		if ( ! is_array( $decoded ) ) {
+			wp_send_json_error( array( 'message' => 'Invalid attributes.' ), 400 );
+		}
+
+		$allowed = array_flip( array_keys( self::hard_defaults() ) );
+		$atts    = array();
+		foreach ( $decoded as $key => $value ) {
+			if ( ! is_string( $key ) || ! isset( $allowed[ $key ] ) || 'custom_css' === $key ) {
+				continue;
+			}
+			if ( ! is_scalar( $value ) ) {
+				wp_send_json_error( array( 'message' => 'Invalid attribute value.' ), 400 );
+			}
+
+			$value = (string) $value;
+			if ( strlen( $value ) > self::MAX_AJAX_ATTRIBUTE_BYTES ) {
+				wp_send_json_error( array( 'message' => 'Attribute value is too large.' ), 400 );
+			}
+			$atts[ $key ] = $value;
+		}
+
+		return $atts;
 	}
 
 	/**
@@ -776,11 +815,19 @@ final class AEM_WhatsNew {
 	}
 
 	/**
-	 * @param array    $atts         ショートコード属性。
-	 * @param int|null $forced_page  非同期ページネーションのAjaxハンドラから、特定ページを強制指定するために使う。
-	 *                                通常のショートコード実行時はnullのままcurrent_page()の値を使う。
+	 * ショートコードのコールバック。第2引数はWordPressが渡す囲みショートコードの本文であり、
+	 * ページ番号には使わない。内部のAjaxレンダリングはrender_list()を直接呼ぶ。
 	 */
-	public static function render( $atts = array(), $forced_page = null ) {
+	public static function render( $atts = array(), $content = null, $shortcode_tag = '' ) {
+		return self::render_list( $atts );
+	}
+
+	/**
+	 * @param array    $atts                  ショートコード属性。
+	 * @param int|null $forced_page           Ajaxから指定するページ番号。通常表示ではnull。
+	 * @param bool     $incremental_load_more Ajaxの「もっと見る」で、当該ページ分だけを返すかどうか。
+	 */
+	private static function render_list( $atts = array(), $forced_page = null, $incremental_load_more = false ) {
 		$atts = shortcode_atts( self::defaults(), $atts, self::SHORTCODE );
 
 		$title_tag       = in_array( $atts['title_tag'], self::ALLOWED_TITLE_TAGS, true ) ? $atts['title_tag'] : 'p';
@@ -823,23 +870,29 @@ final class AEM_WhatsNew {
 		$per_page        = min( 50, max( 1, (int) $atts['number'] ) );
 		$current_page    = $paginate ? ( null !== $forced_page ? max( 1, (int) $forced_page ) : self::current_page() ) : 1;
 
-		$max_pages = 1;
+		$max_pages       = 1;
+		$effective_total = 0;
 		if ( $paginate ) {
 			// 実際に取得する前に件数だけ数え、current_pageを総ページ数(上限反映後)の範囲に丸める。
 			// これをしないと、load_more(累積取得)でURLの?whatsnew_page=を大きくされた場合に
 			// posts_per_page(= per_page * current_page)が際限なく膨らんでしまう。
-			$found_total = self::count_matching_posts( $atts, $orderby );
-			$max_pages   = max( 1, (int) ceil( $found_total / $per_page ) );
+			$found_total     = self::count_matching_posts( $atts, $orderby );
+			$effective_total = $found_total;
 			if ( $max_items > 0 ) {
-				$max_pages = min( $max_pages, max( 1, (int) ceil( $max_items / $per_page ) ) );
+				$effective_total = min( $effective_total, $max_items );
 			}
+			$max_pages    = max( 1, (int) ceil( $effective_total / $per_page ) );
 			$current_page = min( $current_page, $max_pages );
 		}
 
 		// "load_more"はページを重ねるごとに一覧を積み増す仕様のため、都度「先頭からNページ分」を
 		// 一括取得する(offsetで切り出す通常のページ送りとは異なり、常にpaged=1で件数だけ増やす)。
-		$is_cumulative  = ( $paginate && 'load_more' === $pagination_style );
-		$query_per_page = $is_cumulative ? ( $per_page * $current_page ) : $per_page;
+		$is_cumulative  = ( $paginate && 'load_more' === $pagination_style && ! $incremental_load_more );
+		$remaining_items = $paginate ? max( 0, $effective_total - ( ( $current_page - 1 ) * $per_page ) ) : $per_page;
+		$query_per_page = $is_cumulative
+			? min( $per_page * $current_page, $effective_total )
+			: min( $per_page, $remaining_items );
+		$query_per_page = max( 1, $query_per_page );
 		$query_paged    = $is_cumulative ? 1 : $current_page;
 
 		$query = self::query_posts( $atts, $orderby, $query_paged, $query_per_page );
@@ -865,6 +918,9 @@ final class AEM_WhatsNew {
 			// 「次ページの先読み(プリフェッチ)キャッシュ」の起点として使う。
 			$async_attrs .= ' data-aem-whatsnew-page="' . (int) $current_page . '"';
 			$async_attrs .= ' data-aem-whatsnew-max-pages="' . (int) $max_pages . '"';
+			if ( 'load_more' === $pagination_style ) {
+				$async_attrs .= ' data-aem-whatsnew-load-more="1"';
+			}
 		}
 
 		ob_start();
@@ -886,11 +942,13 @@ final class AEM_WhatsNew {
 	<p class="whatsnew-empty"><?php echo esc_html( $atts['empty_text'] ); ?></p>
 			<?php endif; ?>
 		<?php else : ?>
+	<div class="whatsnew-content">
 	<hr />
 			<?php foreach ( $posts as $index => $post ) : ?>
 				<?php
 				$timestamp = get_post_timestamp( $post, $date_field );
-				$is_new    = self::is_new( $index, $timestamp, $newmark_days, $mark_latest );
+				$global_index = $is_cumulative ? $index : ( ( $current_page - 1 ) * $per_page ) + $index;
+				$is_new    = self::is_new( $global_index, $timestamp, $newmark_days, $mark_latest );
 				if ( $use_wareki ) {
 					$date_text = ( 'full' === $wareki_style )
 						? self::wareki_date( $timestamp )
@@ -941,6 +999,7 @@ final class AEM_WhatsNew {
 	</a>
 	<hr />
 			<?php endforeach; ?>
+	</div>
 		<?php endif; ?>
 		<?php if ( $pagination_html && ! $show_header_pagination ) : ?>
 	<?php echo $pagination_html; // phpcs:ignore WordPress.Security.EscapeOutput -- render_pagination()内で組み立て時にエスケープ済み ?>
@@ -962,7 +1021,7 @@ final class AEM_WhatsNew {
 	private static function query_posts( array $atts, $orderby, $paged, $posts_per_page ) {
 		$args = self::build_query_args( $atts, $orderby );
 
-		$args['posts_per_page'] = min( 500, max( 1, (int) $posts_per_page ) );
+		$args['posts_per_page'] = max( 1, (int) $posts_per_page );
 		$args['paged']          = max( 1, (int) $paged );
 		// 件数(found_posts)が必要な場合はcount_matching_posts()で別途取得するため、
 		// ここでのSQL_CALC_FOUND_ROWSは常に無効化しておく。
@@ -1229,7 +1288,18 @@ final class AEM_WhatsNew {
 			$parts = explode( ',', (string) $value );
 		}
 
-		return array_values( array_filter( array_map( 'trim', $parts ), 'strlen' ) );
+		$values = array();
+		foreach ( $parts as $part ) {
+			if ( ! is_scalar( $part ) ) {
+				continue;
+			}
+			$part = trim( (string) $part );
+			if ( '' !== $part && strlen( $part ) <= self::MAX_AJAX_ATTRIBUTE_BYTES ) {
+				$values[] = $part;
+			}
+		}
+
+		return array_slice( $values, 0, self::MAX_LIST_VALUES );
 	}
 
 	private static function is_truthy( $value ) {
@@ -1269,26 +1339,28 @@ final class AEM_WhatsNew {
 	 * @return array<int, array{name: string, start: int}>
 	 */
 	private static function wareki_eras() {
+		$timezone = wp_timezone();
+
 		return array(
 			array(
 				'name'  => '令和',
-				'start' => strtotime( '2019-05-01 00:00:00' ),
+				'start' => ( new DateTimeImmutable( '2019-05-01 00:00:00', $timezone ) )->getTimestamp(),
 			),
 			array(
 				'name'  => '平成',
-				'start' => strtotime( '1989-01-08 00:00:00' ),
+				'start' => ( new DateTimeImmutable( '1989-01-08 00:00:00', $timezone ) )->getTimestamp(),
 			),
 			array(
 				'name'  => '昭和',
-				'start' => strtotime( '1926-12-25 00:00:00' ),
+				'start' => ( new DateTimeImmutable( '1926-12-25 00:00:00', $timezone ) )->getTimestamp(),
 			),
 			array(
 				'name'  => '大正',
-				'start' => strtotime( '1912-07-30 00:00:00' ),
+				'start' => ( new DateTimeImmutable( '1912-07-30 00:00:00', $timezone ) )->getTimestamp(),
 			),
 			array(
 				'name'  => '明治',
-				'start' => strtotime( '1868-01-25 00:00:00' ),
+				'start' => ( new DateTimeImmutable( '1868-01-25 00:00:00', $timezone ) )->getTimestamp(),
 			),
 		);
 	}

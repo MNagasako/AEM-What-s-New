@@ -54,6 +54,10 @@
 		return parseInt( container.getAttribute( 'data-aem-whatsnew-max-pages' ), 10 ) || 1;
 	}
 
+	function isLoadMore( container ) {
+		return '1' === container.getAttribute( 'data-aem-whatsnew-load-more' );
+	}
+
 	function initState( container ) {
 		if ( ! container.__awnCache ) {
 			container.__awnCache = {}; // page(文字列) -> 取得済みHTML
@@ -65,13 +69,13 @@
 	 * 指定ページを取得する。キャッシュ済みなら即solve、進行中なら同じPromiseを共有する。
 	 * activate=trueの場合のみ、取得後に画面へ反映する(falseはプリフェッチ専用)。
 	 */
-	function fetchPage( container, page, activate ) {
+	function fetchPage( container, page, activate, navigationId ) {
 		initState( container );
 		page = String( page );
 
 		if ( container.__awnCache[ page ] ) {
 			if ( activate ) {
-				applyHtml( container, container.__awnCache[ page ] );
+				applyIfCurrent( container, container.__awnCache[ page ], navigationId );
 			}
 			return Promise.resolve( container.__awnCache[ page ] );
 		}
@@ -80,7 +84,7 @@
 			var pending = container.__awnInFlight[ page ];
 			return activate
 				? pending.then( function ( html ) {
-					applyHtml( container, html );
+					applyIfCurrent( container, html, navigationId );
 					return html;
 				} )
 				: pending;
@@ -91,6 +95,9 @@
 		body.set( 'action', window.AEMWhatsNew.action );
 		body.set( 'atts', atts );
 		body.set( 'page', page );
+		if ( isLoadMore( container ) ) {
+			body.set( 'incremental_load_more', '1' );
+		}
 
 		var request = fetch( window.AEMWhatsNew.ajaxUrl, {
 			method: 'POST',
@@ -115,19 +122,21 @@
 		container.__awnInFlight[ page ] = request;
 
 		if ( activate ) {
-			return request
-				.then( function ( html ) {
-					applyHtml( container, html );
-					return html;
-				} )
-				.catch( function () {
-					// 失敗時は表示をそのままにする(リンクの通常hrefで再試行できる)。
-				} );
+			return request.then( function ( html ) {
+				applyIfCurrent( container, html, navigationId );
+				return html;
+			} );
 		}
 
 		return request.catch( function () {
 			// プリフェッチの失敗は無視する(必要になった時点で改めて取得される)。
 		} );
+	}
+
+	function applyIfCurrent( container, html, navigationId ) {
+		if ( navigationId === container.__awnNavigationId ) {
+			applyHtml( container, html );
+		}
 	}
 
 	function applyHtml( container, html ) {
@@ -137,8 +146,13 @@
 		if ( ! fresh ) {
 			return;
 		}
-		container.innerHTML = fresh.innerHTML;
-		[ 'data-aem-whatsnew-atts', 'data-aem-whatsnew-page', 'data-aem-whatsnew-max-pages' ].forEach( function ( attr ) {
+		var incomingPage = parseInt( fresh.getAttribute( 'data-aem-whatsnew-page' ), 10 ) || 1;
+		if ( isLoadMore( container ) && incomingPage > currentPage( container ) ) {
+			appendLoadMoreHtml( container, fresh );
+		} else {
+			container.innerHTML = fresh.innerHTML;
+		}
+		[ 'data-aem-whatsnew-atts', 'data-aem-whatsnew-page', 'data-aem-whatsnew-max-pages', 'data-aem-whatsnew-load-more' ].forEach( function ( attr ) {
 			var value = fresh.getAttribute( attr );
 			if ( value ) {
 				container.setAttribute( attr, value );
@@ -147,6 +161,33 @@
 			}
 		} );
 		schedulePrefetchNext( container );
+	}
+
+	/**
+	 * Ajaxの「もっと見る」は、サーバーから受け取った次ページ分だけを既存の一覧へ追加する。
+	 * これにより、ページ数に比例して先頭から再取得する必要がなくなる。
+	 */
+	function appendLoadMoreHtml( container, fresh ) {
+		var existingContent = container.querySelector( '.whatsnew-content' );
+		var freshContent = fresh.querySelector( '.whatsnew-content' );
+		if ( ! existingContent || ! freshContent ) {
+			container.innerHTML = fresh.innerHTML;
+			return;
+		}
+
+		while ( freshContent.firstChild ) {
+			existingContent.appendChild( freshContent.firstChild );
+		}
+
+		var existingPagination = container.querySelector( '.whatsnew-pagination' );
+		var freshPagination = fresh.querySelector( '.whatsnew-pagination' );
+		if ( existingPagination && freshPagination ) {
+			existingPagination.replaceWith( freshPagination );
+		} else if ( existingPagination ) {
+			existingPagination.remove();
+		} else if ( freshPagination ) {
+			container.appendChild( freshPagination );
+		}
 	}
 
 	/**
@@ -192,9 +233,18 @@
 		event.preventDefault();
 
 		link.setAttribute( 'aria-busy', 'true' );
-		fetchPage( container, page, true ).then( function () {
-			link.removeAttribute( 'aria-busy' );
-		} );
+		container.__awnNavigationId = ( container.__awnNavigationId || 0 ) + 1;
+		var navigationId = container.__awnNavigationId;
+		fetchPage( container, page, true, navigationId )
+			.catch( function () {
+				// Ajaxが恒久的に失敗する環境でも、同期ページネーションとして使い続けられる。
+				if ( navigationId === container.__awnNavigationId ) {
+					window.location.assign( link.href );
+				}
+			} )
+			.then( function () {
+				link.removeAttribute( 'aria-busy' );
+			} );
 	}
 
 	function handleHover( container, event ) {
