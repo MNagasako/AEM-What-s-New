@@ -3,7 +3,7 @@
  * Plugin Name: AEM What's New
  * Plugin URI:  https://github.com/MNagasako/AEM-What-s-New
  * Description: 新着情報一覧をWordPress標準API(WP_Query + ショートコードAPI)だけで表示する。外部プラグイン「What's New Generator」の置き換え。
- * Version:     1.5.6
+ * Version:     1.5.8
  * Author:      分析電顕室
  * License:     GPL-2.0-or-later
  * Requires at least: 6.0
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 final class AEM_WhatsNew {
 
-	const VERSION           = '1.5.6';
+	const VERSION           = '1.5.8';
 	const SHORTCODE         = 'aem_whatsnew';
 	const LEGACY_SHORTCODE  = 'showwhatsnew';
 	const STYLE_HANDLE      = 'aem-whatsnew';
@@ -600,7 +600,7 @@ final class AEM_WhatsNew {
 	public static function ajax_paginate() {
 		$atts = self::ajax_atts_from_request();
 		$page = isset( $_POST['page'] ) ? absint( $_POST['page'] ) : 1; // phpcs:ignore WordPress.Security.NonceVerification.Missing
-		$incremental_load_more = isset( $_POST['incremental_load_more'] ) && '1' === $_POST['incremental_load_more']; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
+		$incremental_load_more = isset( $_POST['incremental_load_more'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['incremental_load_more'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
 
 		wp_send_json_success( array( 'html' => self::render_list( $atts, max( 1, $page ), $incremental_load_more ) ) );
 	}
@@ -617,8 +617,8 @@ final class AEM_WhatsNew {
 			wp_send_json_error( array( 'message' => 'Invalid attributes.' ), 400 );
 		}
 
-		$raw = wp_unslash( $_POST['atts'] ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
-		if ( ! is_string( $raw ) || strlen( $raw ) > self::MAX_AJAX_ATTS_BYTES ) {
+		$raw = sanitize_textarea_field( wp_unslash( $_POST['atts'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
+		if ( strlen( $raw ) > self::MAX_AJAX_ATTS_BYTES ) {
 			wp_send_json_error( array( 'message' => 'Attributes are too large.' ), 400 );
 		}
 
@@ -1113,7 +1113,8 @@ final class AEM_WhatsNew {
 
 		$exclude_ids = self::parse_ids( $atts['exclude_ids'] );
 		if ( ! empty( $exclude_ids ) ) {
-			$args['post__not_in'] = $exclude_ids;
+			// ユーザー指定の除外機能に必要。parse_ids()は重複を除去し最大50件に制限する。
+			$args['post__not_in'] = $exclude_ids; // phpcs:ignore WordPressVIPMinimum.Performance.WPQueryParams.PostNotIn_post__not_in
 		}
 
 		return $args;

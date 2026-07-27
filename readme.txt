@@ -2,9 +2,9 @@
 Contributors: mnagasako
 Tags: shortcode, whats-new, news, recent-posts, category
 Requires at least: 6.0
-Tested up to: 6.7
+Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.5.6
+Stable tag: 1.5.8
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -69,6 +69,14 @@ Only if you set `pagination_mode="async"`. The default, `sync`, uses normal link
 
 == Changelog ==
 
+= 1.5.8 =
+* Fixed the final Plugin Check warning for the public async-pagination request sanitizer.
+
+= 1.5.7 =
+* Normalized the main PHP file's line endings for consistent static analysis.
+* Sanitized public async-pagination request values before decoding them, while retaining strict size, type, and allow-list validation.
+* Documented the bounded, user-configured post-ID exclusion query for Plugin Check.
+
 = 1.5.6 =
 * Prevented stale async responses from overwriting a newer pagination click.
 * Load the async pagination script only when async pagination is enabled.
@@ -119,6 +127,12 @@ Only if you set `pagination_mode="async"`. The default, `sync`, uses normal link
 * Initial release. Packaged from the version already running in production on the Institute for Materials Research (Tohoku University) AEM/analytical electron microscopy site, as a replacement for the external "What's New Generator" plugin.
 
 == Upgrade Notice ==
+
+= 1.5.8 =
+Completes the Plugin Check remediation for the public async-pagination endpoint.
+
+= 1.5.7 =
+Improves WordPress.org Plugin Check compatibility for the public async-pagination endpoint.
 
 = 1.5.6 =
 Improves async pagination reliability and avoids loading its script for ordinary lists.
