@@ -5,6 +5,12 @@ WordPress標準API(`WP_Query` + ショートコードAPI)だけで実装され�
 
 外部プラグイン「What's New Generator」の内製・置き換え版として、東北大学金属材料研究所分析電顕室サイト(www.aem.imr.tohoku.ac.jp) 向けに作成したものを、他サイトでも再利用できる形でこのリポジトリに切り出しています。
 
+## WordPress.org 公開申請
+
+2026年7月27日に WordPress.org Plugin Directory へ `What's New List by M.N.` (バージョン1.5.10) を提出し、現在は手動審査待ちです。申請時に割り当てられたスラッグは `whats-new-list-by-m-n` です。承認後の配布・更新は WordPress.org が案内する SVN リポジトリを正として行います。
+
+公開名は当初の `AEM What's New` から変更しました。`AEM` はこのプロジェクトの開発元である分析電子顕微鏡室を指す内部的な略称でしたが、公開ディレクトリでは他の製品・組織・商標との混同を避けるため、個人の WordPress.org アカウントと対応する `What's New List by M.N.` を使用しています。GitHub リポジトリ名や既存運用サイトの内部ショートコード／設定キーは、互換性維持のため変更していません。
+
 ## 謝辞・経緯
 
 長らく本サイトの新着情報表示を支えてくれた、Hideki Tanaka氏(WordPress.orgユーザー名:
