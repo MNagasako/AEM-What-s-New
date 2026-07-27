@@ -1,4 +1,4 @@
-# AEM What's New
+# What's New List by M.N.
 
 トップページ等に「新着情報」一覧を表示するための、軽量なWordPressプラグインです。
 WordPress標準API(`WP_Query` + ショートコードAPI)だけで実装されており、外部ライブラリやビルド手順は不要です。
@@ -41,10 +41,10 @@ WordPress標準API(`WP_Query` + ショートコードAPI)だけで実装され�
    (ディレクトリ名・メインファイル名 `aem-whatsnew.php` は変更しないこと。過去に別名の
    「What's New Generator」を使っていた場合、ショートコード名の競合を避けるための
    判定に使われるため)
-2. 管理画面の「プラグイン」から **AEM What's New** を有効化する
+2. 管理画面の「プラグイン」から **What's New List by M.N.** を有効化する
 3. 表示したいページ/投稿に `[aem_whatsnew]` を挿入する
 
-表示内容の既定値は「設定 > AEM What's New」の管理画面で変更できます(プレビュー付き)。
+表示内容の既定値は「設定 > What's New List by M.N.」の管理画面で変更できます(プレビュー付き)。
 ショートコード側で属性を明示指定した場合は、そちらが優先されます。
 
 ## 使い方(USAGE)
@@ -157,7 +157,7 @@ WordPress標準API(`WP_Query` + ショートコードAPI)だけで実装され�
 詳細は後述の「ページネーション」の節を参照。
 
 `custom_css`(カスタムCSS)と`ui_language`(表示言語)はサイト全体に効く設定のため、
-ショートコード属性ではなく「設定 > AEM What's New」の管理画面からのみ編集する
+ショートコード属性ではなく「設定 > What's New List by M.N.」の管理画面からのみ編集する
 (後述の各節を参照)。
 
 ### 日付フォーマットと和暦
@@ -251,7 +251,7 @@ readme.txtは英語を主とし、末尾に日本語セクションを設けて�
 
 ### カスタムCSS
 
-同梱の`aem-whatsnew.css`に加えて、「設定 > AEM What's New」の「カスタムCSS」欄に書いた
+同梱の`aem-whatsnew.css`に加えて、「設定 > What's New List by M.N.」の「カスタムCSS」欄に書いた
 CSSが追加で読み込まれる(`wp_add_inline_style()`)。対象になる主なクラス:
 
 | クラス | 用途 |

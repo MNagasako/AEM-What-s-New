@@ -1,10 +1,10 @@
-=== AEM What's New ===
+=== What's New List by M.N. ===
 Contributors: mnagasako
 Tags: shortcode, whats-new, news, recent-posts, category
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.5.8
+Stable tag: 1.5.9
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -20,7 +20,7 @@ The `[aem_whatsnew]` shortcode displays a simple list of recent posts/pages, opt
 * An optional single-line layout (date, type, category, and title in one row) in addition to the default stacked layout.
 * Optional pagination (`pagination="yes"`), using a dedicated `?whatsnew_page=N` query argument so it never collides with archive pagination or in-post `<!--nextpage-->` breaks. Choose sync (normal links) or async (in-place Ajax update) mode, a numbered/prev-next/"load more" style, a bottom-left/bottom-right/top-right position, and optionally cap the total number of items reachable via pagination.
 * Optional date-range filtering (`date_from` / `date_to`) and a Japanese-era ("wareki") date format option (`date_format="wareki"`, e.g. "令和7年7月27日").
-* A "Settings > AEM What's New" admin screen (with a live preview) lets you edit all of the above defaults without touching a shortcode. Explicit shortcode attributes always win over the saved settings.
+* A "Settings > What's New List by M.N." admin screen (with a live preview) lets you edit all of the above defaults without touching a shortcode. Explicit shortcode attributes always win over the saved settings.
 * The admin screen and the built-in default text (heading, "NEW!" mark, empty-state text) can be shown in Japanese or English, either automatically (based on the site's language) or forced manually.
 * Uses `WP_Query` (not `get_posts()` with filters suppressed), so plugins like User Access Manager that restrict post visibility are respected — restricted posts never leak into the list.
 * Designed as a drop-in replacement for the discontinued "What's New Generator" plugin: it registers the same `[showwhatsnew]` shortcode automatically, but only while the old plugin is not active, so both can be enabled at once during migration.
@@ -35,11 +35,11 @@ That plugin was closed on WordPress.org on 2024-06-15 for a security issue and i
 
 == Installation ==
 
-1. Copy the `aem-whatsnew` folder into `wp-content/plugins/`.
-2. Activate **AEM What's New** from the Plugins screen.
+1. Copy the `whats-new-list-by-m-n` folder into `wp-content/plugins/`.
+2. Activate **What's New List by M.N.** from the Plugins screen.
 3. Insert `[aem_whatsnew]` into any page or post where you want the list to appear.
 
-Default display values can be changed from "Settings > AEM What's New" (with a live preview). Attributes set explicitly on the shortcode always take priority over these settings.
+Default display values can be changed from "Settings > What's New List by M.N." (with a live preview). Attributes set explicitly on the shortcode always take priority over these settings.
 
 == Frequently Asked Questions ==
 
@@ -68,6 +68,9 @@ Yes. Set `date_format="wareki"` (or the same value in the settings screen) to re
 Only if you set `pagination_mode="async"`. The default, `sync`, uses normal link navigation and works without JavaScript. Async mode loads a small bundled script (`aem-whatsnew.js`, no build step) and updates the list in place via `admin-ajax.php`.
 
 == Changelog ==
+
+= 1.5.9 =
+* Renamed the public plugin title to What's New List by M.N. to avoid ambiguity with unrelated products and trademarks.
 
 = 1.5.8 =
 * Fixed the final Plugin Check warning for the public async-pagination request sanitizer.
@@ -121,12 +124,15 @@ Only if you set `pagination_mode="async"`. The default, `sync`, uses normal link
 * The "Post types" setting changed from free text to checkboxes, automatically listing the site's actual public post types.
 
 = 1.1.0 =
-* Added a "Settings > AEM What's New" admin screen with a live preview, covering every shortcode default. Explicit shortcode attributes still take priority.
+* Added a settings admin screen with a live preview, covering every shortcode default. Explicit shortcode attributes still take priority.
 
 = 1.0.0 =
 * Initial release. Packaged from the version already running in production on the Institute for Materials Research (Tohoku University) AEM/analytical electron microscopy site, as a replacement for the external "What's New Generator" plugin.
 
 == Upgrade Notice ==
+
+= 1.5.9 =
+Renames the public plugin title to What's New List by M.N.
 
 = 1.5.8 =
 Completes the Plugin Check remediation for the public async-pagination endpoint.
@@ -165,7 +171,7 @@ Adds category/type columns, a title length limit, a custom "NEW!" string, and cu
 The "Post types" setting is now a checkbox list. Existing saved values are carried over automatically.
 
 = 1.1.0 =
-Adds a "Settings > AEM What's New" admin screen. No effect on existing shortcode usage.
+Adds a settings admin screen. No effect on existing shortcode usage.
 
 = 1.0.0 =
 Initial release.
@@ -178,7 +184,7 @@ Initial release.
 
 ページネーション(専用クエリ引数`?whatsnew_page=N`使用)は、方式(同期/非同期Ajax)・スタイル(番号付き/前へ次へのみ/もっと見るボタン)・表示位置(一覧の下・左右/見出しの右端)・件数上限を組み合わせて設定できます。
 
-「設定 > AEM What's New」の管理画面(プレビュー付き)から、ショートコードを書かずに既定値を編集できます(ショートコード属性を明示指定した場合はそちらが優先)。管理画面表示・既定文言は日本語/英語を自動または手動で切り替え可能です。
+「設定 > What's New List by M.N.」の管理画面(プレビュー付き)から、ショートコードを書かずに既定値を編集できます(ショートコード属性を明示指定した場合はそちらが優先)。管理画面表示・既定文言は日本語/英語を自動または手動で切り替え可能です。
 
 `WP_Query`を使って一覧を取得するため、User Access Manager等の閲覧制限プラグインと併用しても、権限のない記事は一覧に出ません。
 

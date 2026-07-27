@@ -1,10 +1,10 @@
 <?php
 /**
- * Plugin Name: AEM What's New
+ * Plugin Name: What's New List by M.N.
  * Plugin URI:  https://github.com/MNagasako/AEM-What-s-New
  * Description: 新着情報一覧をWordPress標準API(WP_Query + ショートコードAPI)だけで表示する。外部プラグイン「What's New Generator」の置き換え。
- * Version:     1.5.8
- * Author:      分析電顕室
+ * Version:     1.5.9
+ * Author:      M.N.
  * License:     GPL-2.0-or-later
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 final class AEM_WhatsNew {
 
-	const VERSION           = '1.5.8';
+	const VERSION           = '1.5.9';
 	const SHORTCODE         = 'aem_whatsnew';
 	const LEGACY_SHORTCODE  = 'showwhatsnew';
 	const STYLE_HANDLE      = 'aem-whatsnew';
@@ -173,7 +173,7 @@ final class AEM_WhatsNew {
 		return array(
 			'ja' => array(
 				'settings_link'          => '設定',
-				'page_heading'           => "AEM What's New — 設定",
+				'page_heading'           => "What's New List by M.N. — 設定",
 				'intro'                  => 'ここで指定した値は、ショートコード [aem_whatsnew] / [showwhatsnew] の既定値になります。ショートコード側で属性を明示指定した場合は、そちらが優先されます。',
 				'preview_heading'        => 'プレビュー',
 				'preview_desc'           => '現在保存されている設定で [aem_whatsnew] を表示した場合の見た目です。',
@@ -250,7 +250,7 @@ final class AEM_WhatsNew {
 			),
 			'en' => array(
 				'settings_link'          => 'Settings',
-				'page_heading'           => "AEM What's New — Settings",
+				'page_heading'           => "What's New List by M.N. — Settings",
 				'intro'                  => 'Values set here become the defaults for the [aem_whatsnew] / [showwhatsnew] shortcode. Explicit shortcode attributes always take priority over these settings.',
 				'preview_heading'        => 'Preview',
 				'preview_desc'           => 'This is how [aem_whatsnew] currently renders with the settings saved below.',
@@ -341,7 +341,7 @@ final class AEM_WhatsNew {
 	/**
 	 * ショートコードの既定値。
 	 *
-	 * 設定画面(「設定 > AEM What's New」)で保存された値をハード既定値の上に重ねたもの。
+	 * 設定画面(「設定 > What's New List by M.N.」)で保存された値をハード既定値の上に重ねたもの。
 	 * ショートコード側で属性を明示指定した場合は、shortcode_atts()の仕様によりこちらではなく
 	 * 明示指定された値が使われる(= ショートコード属性が最優先)。
 	 */
@@ -531,8 +531,8 @@ final class AEM_WhatsNew {
 	 */
 	public static function register_settings_page() {
 		add_options_page(
-			"AEM What's New",
-			"AEM What's New",
+			"What's New List by M.N.",
+			"What's New List by M.N.",
 			'manage_options',
 			self::SETTINGS_SLUG,
 			array( __CLASS__, 'render_settings_page' )
