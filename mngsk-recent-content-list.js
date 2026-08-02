@@ -1,9 +1,9 @@
 /**
- * AEM What's New — pagination_mode="async" 用のクライアント側スクリプト。
+ * Mngsk Recent Content List — pagination_mode="async" 用のクライアント側スクリプト。
  *
  * ビルド手順を持たないプラグインのため、フレームワーク無しの素のJSで書いてある。
- * .whatsnew[data-aem-whatsnew-async] 要素の中で .whatsnew-pagination 内の<a>がクリックされたら、
- * href の ?whatsnew_page=N を読み取ってAjaxで該当ページ分のHTMLを取得し、その場で差し替える。
+ * .mngsk-recent-content[data-mngsk-recent-content-async] 要素の中で
+ * .mngsk-recent-content__pagination 内の<a>がクリックされたら、該当ページ分のHTMLを取得し、その場で差し替える。
  *
  * 先読み(プリフェッチ)キャッシュ:
  * - ページを表示するたびに、ブラウザがアイドルな時間を使って「次のページ」を裏で取得し
@@ -43,25 +43,25 @@
 		} catch ( err ) {
 			return null;
 		}
-		return url.searchParams.get( window.AEMWhatsNew.pageParam );
+		return url.searchParams.get( window.MngskRecentContent.pageParam );
 	}
 
 	function currentPage( container ) {
-		return parseInt( container.getAttribute( 'data-aem-whatsnew-page' ), 10 ) || 1;
+		return parseInt( container.getAttribute( 'data-mngsk-recent-content-page' ), 10 ) || 1;
 	}
 
 	function maxPages( container ) {
-		return parseInt( container.getAttribute( 'data-aem-whatsnew-max-pages' ), 10 ) || 1;
+		return parseInt( container.getAttribute( 'data-mngsk-recent-content-max-pages' ), 10 ) || 1;
 	}
 
 	function isLoadMore( container ) {
-		return '1' === container.getAttribute( 'data-aem-whatsnew-load-more' );
+		return '1' === container.getAttribute( 'data-mngsk-recent-content-load-more' );
 	}
 
 	function initState( container ) {
-		if ( ! container.__awnCache ) {
-			container.__awnCache = {}; // page(文字列) -> 取得済みHTML
-			container.__awnInFlight = {}; // page(文字列) -> 進行中のPromise
+		if ( ! container.__mngskCache ) {
+			container.__mngskCache = {}; // page(文字列) -> 取得済みHTML
+			container.__mngskInFlight = {}; // page(文字列) -> 進行中のPromise
 		}
 	}
 
@@ -73,15 +73,15 @@
 		initState( container );
 		page = String( page );
 
-		if ( container.__awnCache[ page ] ) {
+		if ( container.__mngskCache[ page ] ) {
 			if ( activate ) {
-				applyIfCurrent( container, container.__awnCache[ page ], navigationId );
+				applyIfCurrent( container, container.__mngskCache[ page ], navigationId );
 			}
-			return Promise.resolve( container.__awnCache[ page ] );
+			return Promise.resolve( container.__mngskCache[ page ] );
 		}
 
-		if ( container.__awnInFlight[ page ] ) {
-			var pending = container.__awnInFlight[ page ];
+		if ( container.__mngskInFlight[ page ] ) {
+			var pending = container.__mngskInFlight[ page ];
 			return activate
 				? pending.then( function ( html ) {
 					applyIfCurrent( container, html, navigationId );
@@ -90,16 +90,16 @@
 				: pending;
 		}
 
-		var atts = container.getAttribute( 'data-aem-whatsnew-atts' ) || '{}';
+		var atts = container.getAttribute( 'data-mngsk-recent-content-atts' ) || '{}';
 		var body = new URLSearchParams();
-		body.set( 'action', window.AEMWhatsNew.action );
+		body.set( 'action', window.MngskRecentContent.action );
 		body.set( 'atts', atts );
 		body.set( 'page', page );
 		if ( isLoadMore( container ) ) {
 			body.set( 'incremental_load_more', '1' );
 		}
 
-		var request = fetch( window.AEMWhatsNew.ajaxUrl, {
+		var request = fetch( window.MngskRecentContent.ajaxUrl, {
 			method: 'POST',
 			credentials: 'same-origin',
 			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -110,16 +110,16 @@
 			} )
 			.then( function ( json ) {
 				if ( ! json || ! json.success || ! json.data || ! json.data.html ) {
-					throw new Error( 'aem-whatsnew: invalid Ajax response' );
+					throw new Error( 'mngsk-recent-content: invalid Ajax response' );
 				}
-				container.__awnCache[ page ] = json.data.html;
+				container.__mngskCache[ page ] = json.data.html;
 				return json.data.html;
 			} )
 			.finally( function () {
-				delete container.__awnInFlight[ page ];
+				delete container.__mngskInFlight[ page ];
 			} );
 
-		container.__awnInFlight[ page ] = request;
+		container.__mngskInFlight[ page ] = request;
 
 		if ( activate ) {
 			return request.then( function ( html ) {
@@ -134,7 +134,7 @@
 	}
 
 	function applyIfCurrent( container, html, navigationId ) {
-		if ( navigationId === container.__awnNavigationId ) {
+		if ( navigationId === container.__mngskNavigationId ) {
 			applyHtml( container, html );
 		}
 	}
@@ -142,17 +142,17 @@
 	function applyHtml( container, html ) {
 		var tmp = document.createElement( 'div' );
 		tmp.innerHTML = html;
-		var fresh = tmp.querySelector( '.whatsnew' );
+		var fresh = tmp.querySelector( '.mngsk-recent-content' );
 		if ( ! fresh ) {
 			return;
 		}
-		var incomingPage = parseInt( fresh.getAttribute( 'data-aem-whatsnew-page' ), 10 ) || 1;
+		var incomingPage = parseInt( fresh.getAttribute( 'data-mngsk-recent-content-page' ), 10 ) || 1;
 		if ( isLoadMore( container ) && incomingPage > currentPage( container ) ) {
 			appendLoadMoreHtml( container, fresh );
 		} else {
 			container.innerHTML = fresh.innerHTML;
 		}
-		[ 'data-aem-whatsnew-atts', 'data-aem-whatsnew-page', 'data-aem-whatsnew-max-pages', 'data-aem-whatsnew-load-more' ].forEach( function ( attr ) {
+		[ 'data-mngsk-recent-content-atts', 'data-mngsk-recent-content-page', 'data-mngsk-recent-content-max-pages', 'data-mngsk-recent-content-load-more' ].forEach( function ( attr ) {
 			var value = fresh.getAttribute( attr );
 			if ( value ) {
 				container.setAttribute( attr, value );
@@ -168,8 +168,8 @@
 	 * これにより、ページ数に比例して先頭から再取得する必要がなくなる。
 	 */
 	function appendLoadMoreHtml( container, fresh ) {
-		var existingContent = container.querySelector( '.whatsnew-content' );
-		var freshContent = fresh.querySelector( '.whatsnew-content' );
+		var existingContent = container.querySelector( '.mngsk-recent-content__content' );
+		var freshContent = fresh.querySelector( '.mngsk-recent-content__content' );
 		if ( ! existingContent || ! freshContent ) {
 			container.innerHTML = fresh.innerHTML;
 			return;
@@ -179,8 +179,8 @@
 			existingContent.appendChild( freshContent.firstChild );
 		}
 
-		var existingPagination = container.querySelector( '.whatsnew-pagination' );
-		var freshPagination = fresh.querySelector( '.whatsnew-pagination' );
+		var existingPagination = container.querySelector( '.mngsk-recent-content__pagination' );
+		var freshPagination = fresh.querySelector( '.mngsk-recent-content__pagination' );
 		if ( existingPagination && freshPagination ) {
 			existingPagination.replaceWith( freshPagination );
 		} else if ( existingPagination ) {
@@ -215,7 +215,7 @@
 
 	function paginationLinkFromEvent( container, event ) {
 		var link = event.target.closest ? event.target.closest( 'a' ) : null;
-		if ( ! link || ! container.contains( link ) || ! link.closest( '.whatsnew-pagination' ) ) {
+		if ( ! link || ! container.contains( link ) || ! link.closest( '.mngsk-recent-content__pagination' ) ) {
 			return null;
 		}
 		return link;
@@ -233,12 +233,12 @@
 		event.preventDefault();
 
 		link.setAttribute( 'aria-busy', 'true' );
-		container.__awnNavigationId = ( container.__awnNavigationId || 0 ) + 1;
-		var navigationId = container.__awnNavigationId;
+		container.__mngskNavigationId = ( container.__mngskNavigationId || 0 ) + 1;
+		var navigationId = container.__mngskNavigationId;
 		fetchPage( container, page, true, navigationId )
 			.catch( function () {
 				// Ajaxが恒久的に失敗する環境でも、同期ページネーションとして使い続けられる。
-				if ( navigationId === container.__awnNavigationId ) {
+				if ( navigationId === container.__mngskNavigationId ) {
 					window.location.assign( link.href );
 				}
 			} )
@@ -263,7 +263,7 @@
 	}
 
 	onDomReady( function () {
-		var containers = document.querySelectorAll( '.whatsnew[data-aem-whatsnew-async]' );
+		var containers = document.querySelectorAll( '.mngsk-recent-content[data-mngsk-recent-content-async]' );
 		for ( var i = 0; i < containers.length; i++ ) {
 			( function ( container ) {
 				initState( container );

@@ -1,36 +1,35 @@
 <?php
 /**
- * Plugin Name: What's New List by M.N.
+ * Plugin Name: Mngsk Recent Content List
  * Plugin URI:  https://github.com/MNagasako/AEM-What-s-New
  * Description: 新着情報一覧をWordPress標準API(WP_Query + ショートコードAPI)だけで表示する。外部プラグイン「What's New Generator」の置き換え。
- * Version:     1.5.10
+ * Version:     1.6.1
  * Author:      M.N.
  * License:     GPL-2.0-or-later
  * Requires at least: 6.0
  * Requires PHP: 7.4
- * Text Domain: whats-new-list-by-m-n
+ * Text Domain: mngsk-recent-content-list
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-final class AEM_WhatsNew {
+final class Mngsk_Recent_Content_List {
 
-	const VERSION           = '1.5.10';
-	const SHORTCODE         = 'aem_whatsnew';
-	const LEGACY_SHORTCODE  = 'showwhatsnew';
-	const STYLE_HANDLE      = 'aem-whatsnew';
-	const OPTION_NAME       = 'aem_whatsnew_options';
-	const SETTINGS_GROUP    = 'aem_whatsnew_group';
-	const SETTINGS_SLUG     = 'aem-whatsnew';
-	const SCRIPT_HANDLE     = 'aem-whatsnew';
-	const AJAX_ACTION       = 'aem_whatsnew_paginate';
+	const VERSION           = '1.6.1';
+	const SHORTCODE         = 'mngsk_recent_content';
+	const STYLE_HANDLE      = 'mngsk-recent-content';
+	const OPTION_NAME       = 'mngsk_recent_content_options';
+	const SETTINGS_GROUP    = 'mngsk_recent_content_group';
+	const SETTINGS_SLUG     = 'mngsk-recent-content';
+	const SCRIPT_HANDLE     = 'mngsk-recent-content';
+	const AJAX_ACTION       = 'mngsk_recent_content_paginate';
 	const MAX_AJAX_ATTS_BYTES = 4096;
 	const MAX_AJAX_ATTRIBUTE_BYTES = 512;
 	const MAX_LIST_VALUES = 50;
 	/** ページネーション有効時に使うURLクエリ引数名。WPの`paged`は既存のアーカイブ/投稿ページ分割と衝突するため専用の名前にしてある。 */
-	const PAGE_QUERY_VAR    = 'whatsnew_page';
+	const PAGE_QUERY_VAR    = 'mngsk_recent_content_page';
 
 	/** 見出しに許可するタグ。これ以外が指定されたら p に落とす。 */
 	const ALLOWED_TITLE_TAGS = array( 'p', 'h2', 'h3', 'h4', 'h5', 'h6', 'div' );
@@ -51,37 +50,26 @@ final class AEM_WhatsNew {
 	/**
 	 * ショートコードを登録する。
 	 *
-	 * 旧What's New Generatorはプラグイン読み込み時に[showwhatsnew]を登録するため、
-	 * initの時点で既に存在していれば旧プラグインがまだ有効ということ。その場合は
-	 * 上書きせず、新ショートコードだけを提供する(移行期間中の同時有効化対策)。
+	 * ディレクトリ向けの固有接頭辞を持つショートコードを登録する。
 	 */
 	public static function register_shortcodes() {
 		add_shortcode( self::SHORTCODE, array( __CLASS__, 'render' ) );
-
-		if ( ! shortcode_exists( self::LEGACY_SHORTCODE ) ) {
-			add_shortcode( self::LEGACY_SHORTCODE, array( __CLASS__, 'render' ) );
-		}
 	}
 
 	public static function register_style() {
 		wp_register_style(
 			self::STYLE_HANDLE,
-			plugins_url( 'aem-whatsnew.css', __FILE__ ),
+			plugins_url( 'mngsk-recent-content-list.css', __FILE__ ),
 			array(),
 			self::VERSION
 		);
-		// wp_add_inline_style()は該当ハンドルの<link>が出力される前に呼ぶ必要があるため、
-		// render()側(the_content内、wp_head以降に実行される)ではなくここで呼んでおく。
-		self::ensure_custom_css();
-
 		self::register_pagination_script();
 
 		// 本文にショートコードがあるページでだけ読み込む(<head>に入れてFOUCを避ける)。
 		// テンプレート直書き等でrender()が直接呼ばれた場合はrender()側でenqueueする。
 		$post = get_post();
 		if ( $post instanceof WP_Post
-			&& ( has_shortcode( $post->post_content, self::SHORTCODE )
-				|| has_shortcode( $post->post_content, self::LEGACY_SHORTCODE ) ) ) {
+			&& has_shortcode( $post->post_content, self::SHORTCODE ) ) {
 			wp_enqueue_style( self::STYLE_HANDLE );
 		}
 	}
@@ -93,14 +81,14 @@ final class AEM_WhatsNew {
 	private static function register_pagination_script() {
 		wp_register_script(
 			self::SCRIPT_HANDLE,
-			plugins_url( 'aem-whatsnew.js', __FILE__ ),
+			plugins_url( 'mngsk-recent-content-list.js', __FILE__ ),
 			array(),
 			self::VERSION,
 			true
 		);
 		wp_localize_script(
 			self::SCRIPT_HANDLE,
-			'AEMWhatsNew',
+			'MngskRecentContent',
 			array(
 				'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
 				'action'    => self::AJAX_ACTION,
@@ -134,9 +122,8 @@ final class AEM_WhatsNew {
 			'newmark_text'     => self::t( 'default_newmark_text' ),
 			'date_format'      => '',                // 空=「設定 > 一般」の日付フォーマット
 			'empty_text'       => self::t( 'default_empty_text' ),
-			'custom_css'       => '',                // 設定画面のみで編集。ショートコード属性としては扱わない
 			'ui_language'      => 'auto',             // auto | ja | en (管理画面表示と上記既定文言に使う)
-			'pagination'       => 'no',               // ページネーション(?whatsnew_page=N)を有効にするか
+			'pagination'       => 'no',               // ページネーションを有効にするか
 			'pagination_mode'  => 'sync',              // sync(通常のリンク遷移) | async(Ajaxでその場更新)
 			'pagination_style' => 'numbers',           // numbers | prev_next | load_more
 			'pagination_position' => 'bottom_left',   // bottom_left | bottom_right | top_right(見出しの右端)
@@ -153,7 +140,7 @@ final class AEM_WhatsNew {
 	 * 保存済みオプションを直接読む。
 	 */
 	private static function current_lang() {
-		$saved   = get_option( self::OPTION_NAME, array() );
+		$saved   = self::saved_options();
 		$setting = ( is_array( $saved ) && isset( $saved['ui_language'] ) ) ? $saved['ui_language'] : 'auto';
 
 		if ( in_array( $setting, array( 'ja', 'en' ), true ) ) {
@@ -173,10 +160,10 @@ final class AEM_WhatsNew {
 		return array(
 			'ja' => array(
 				'settings_link'          => '設定',
-				'page_heading'           => "What's New List by M.N. — 設定",
-				'intro'                  => 'ここで指定した値は、ショートコード [aem_whatsnew] / [showwhatsnew] の既定値になります。ショートコード側で属性を明示指定した場合は、そちらが優先されます。',
+				'page_heading'           => 'Mngsk Recent Content List — 設定',
+				'intro'                  => 'ここで指定した値は、ショートコード [mngsk_recent_content] の既定値になります。ショートコード側で属性を明示指定した場合は、そちらが優先されます。',
 				'preview_heading'        => 'プレビュー',
-				'preview_desc'           => '現在保存されている設定で [aem_whatsnew] を表示した場合の見た目です。',
+				'preview_desc'           => '現在保存されている設定で [mngsk_recent_content] を表示した場合の見た目です。',
 				'checkbox_enable'        => '有効にする',
 				'label_title'            => '見出しテキスト',
 				'desc_title'             => '空にすると見出しを表示しない',
@@ -191,7 +178,7 @@ final class AEM_WhatsNew {
 				'choice_orderby_date'     => '投稿日',
 				'choice_orderby_modified' => '更新日',
 				'label_layout'           => '一覧のレイアウト',
-				'desc_layout'            => '「1行」を選ぶと日付・タイプ・カテゴリ・タイトルが横一列に並ぶ(カスタムCSSで細かい配置調整も可能)',
+				'desc_layout'            => '「1行」を選ぶと日付・タイプ・カテゴリ・タイトルが横一列に並ぶ',
 				'choice_layout_stacked'  => '積み重ね(既定、日付の下にタイトル等を表示)',
 				'choice_layout_inline'   => '1行(日付・タイプ・カテゴリ・タイトルを横一列に表示)',
 				'label_category'         => '対象カテゴリ',
@@ -212,15 +199,13 @@ final class AEM_WhatsNew {
 				'desc_date_format'       => '空欄で「設定 > 一般」の日付形式を使用(PHPのdate()書式)。和暦表示用の特別な値も指定できる(明治以降の元号に対応): wareki=令和7年7月27日、wareki_year=令和元/令和7、wareki_year_numeric=令和1/令和7、wareki_year_02d=令和01/令和07。これらのキーワードの直後に続けた文字はdate()書式として評価される(例: wareki_year_02d年 → 令和07年、wareki_year年n月j日 → 令和7年7月27日)',
 				'label_empty_text'       => '0件時の表示文言',
 				'desc_empty_text'        => '空にすると非表示',
-				'label_custom_css'       => 'カスタムCSS',
-				'desc_custom_css'        => '同梱の aem-whatsnew.css に追加で読み込まれる。NEW!マークや日付/タイトル/カテゴリ/タイプの並び方など、見た目全般をここで上書きできる(対象クラス: .whatsnew, .whatsnew-title, .whatsnew-item, .whatsnew-row, .whatsnew-header, .newmark, .whatsnew-type, .whatsnew-category, .whatsnew-pagination 等)',
 				'label_ui_language'      => '管理画面・既定文言の表示言語',
 				'desc_ui_language'       => '「自動」はサイトの言語設定(ja/それ以外)に追従する',
 				'choice_lang_auto'       => '自動(サイトの言語設定に従う)',
 				'choice_lang_ja'         => '日本語',
 				'choice_lang_en'         => 'English',
 				'label_pagination'       => 'ページネーションを有効にする',
-				'desc_pagination'        => '有効にすると「表示件数」が1ページあたりの件数になり、URLに ?whatsnew_page=2 のように付けてページを切り替えられる(同一ページに複数配置している場合、ページ番号はすべての配置で共有される)',
+				'desc_pagination'        => '有効にすると「表示件数」が1ページあたりの件数になり、URLに ?mngsk_recent_content_page=2 のように付けてページを切り替えられる(同一ページに複数配置している場合、ページ番号はすべての配置で共有される)',
 				'label_pagination_mode'  => 'ページ切り替えの方式',
 				'desc_pagination_mode'   => '「非同期」はJavaScriptでその場更新(ページ全体の再読み込みなし)、「同期」は通常のリンク遷移。非同期では次ページの先読みキャッシュも行う(表示済みページ・リンクへのホバー先読み分はAjax再取得なしで即表示)',
 				'choice_pagination_mode_sync'  => '同期(通常のリンク遷移)',
@@ -250,10 +235,10 @@ final class AEM_WhatsNew {
 			),
 			'en' => array(
 				'settings_link'          => 'Settings',
-				'page_heading'           => "What's New List by M.N. — Settings",
-				'intro'                  => 'Values set here become the defaults for the [aem_whatsnew] / [showwhatsnew] shortcode. Explicit shortcode attributes always take priority over these settings.',
+				'page_heading'           => 'Mngsk Recent Content List — Settings',
+				'intro'                  => 'Values set here become the defaults for the [mngsk_recent_content] shortcode. Explicit shortcode attributes always take priority over these settings.',
 				'preview_heading'        => 'Preview',
-				'preview_desc'           => 'This is how [aem_whatsnew] currently renders with the settings saved below.',
+				'preview_desc'           => 'This is how [mngsk_recent_content] currently renders with the settings saved below.',
 				'checkbox_enable'        => 'Enable',
 				'label_title'            => 'Heading text',
 				'desc_title'             => 'Leave empty to hide the heading',
@@ -268,7 +253,7 @@ final class AEM_WhatsNew {
 				'choice_orderby_date'     => 'Publish date',
 				'choice_orderby_modified' => 'Modified date',
 				'label_layout'           => 'List layout',
-				'desc_layout'            => '"Single line" puts the date, type, category and title on one row (use the custom CSS box for fine-tuning)',
+				'desc_layout'            => '"Single line" puts the date, type, category and title on one row',
 				'choice_layout_stacked'  => 'Stacked (default — title etc. below the date)',
 				'choice_layout_inline'   => 'Single line (date, type, category and title in one row)',
 				'label_category'         => 'Categories',
@@ -289,15 +274,13 @@ final class AEM_WhatsNew {
 				'desc_date_format'       => "Leave empty to use the site's Settings > General date format (PHP date() syntax). Special values render the Japanese era calendar instead (all eras from Meiji onward): wareki=令和7年7月27日, wareki_year=令和元/令和7, wareki_year_numeric=令和1/令和7, wareki_year_02d=令和01/令和07. Any text right after one of these keywords is evaluated as a PHP date() format (e.g. wareki_year_02d年 → 令和07年, wareki_year年n月j日 → 令和7年7月27日)",
 				'label_empty_text'       => 'Empty-state text',
 				'desc_empty_text'        => 'Shown when there are no matching items. Leave empty to hide',
-				'label_custom_css'       => 'Custom CSS',
-				'desc_custom_css'        => 'Loaded in addition to the bundled aem-whatsnew.css. Use it to restyle anything, including the "NEW!" mark and the list layout (relevant classes: .whatsnew, .whatsnew-title, .whatsnew-item, .whatsnew-row, .whatsnew-header, .newmark, .whatsnew-type, .whatsnew-category, .whatsnew-pagination, etc.)',
 				'label_ui_language'      => 'Admin screen & default text language',
 				'desc_ui_language'       => '"Auto" follows the site\'s language setting (Japanese vs. everything else)',
 				'choice_lang_auto'       => 'Auto (follow site language)',
 				'choice_lang_ja'         => '日本語 (Japanese)',
 				'choice_lang_en'         => 'English',
 				'label_pagination'       => 'Enable pagination',
-				'desc_pagination'        => 'When enabled, "Number of items" becomes the per-page count, and the list can be paged via ?whatsnew_page=2 in the URL (the page number is shared across all instances if you place the shortcode more than once on the same page)',
+				'desc_pagination'        => 'When enabled, "Number of items" becomes the per-page count, and the list can be paged via ?mngsk_recent_content_page=2 in the URL (the page number is shared across all instances if you place the shortcode more than once on the same page)',
 				'label_pagination_mode'  => 'Pagination mode',
 				'desc_pagination_mode'   => '"Async" updates the list in place via JavaScript (no full page reload); "Sync" is a normal link navigation. Async also prefetches and caches the next page (and any page you hover/focus), so already-fetched pages display instantly without another Ajax round trip',
 				'choice_pagination_mode_sync'  => 'Sync (normal link navigation)',
@@ -341,14 +324,26 @@ final class AEM_WhatsNew {
 	/**
 	 * ショートコードの既定値。
 	 *
-	 * 設定画面(「設定 > What's New List by M.N.」)で保存された値をハード既定値の上に重ねたもの。
+	 * 設定画面で保存された値をハード既定値の上に重ねたもの。
 	 * ショートコード側で属性を明示指定した場合は、shortcode_atts()の仕様によりこちらではなく
 	 * 明示指定された値が使われる(= ショートコード属性が最優先)。
 	 */
 	private static function defaults() {
-		$saved = get_option( self::OPTION_NAME, array() );
+		$saved = self::saved_options();
 
 		return wp_parse_args( is_array( $saved ) ? $saved : array(), self::hard_defaults() );
+	}
+
+	/**
+	 * 保存済み設定を読み込む。
+	 */
+	private static function saved_options() {
+		$saved = get_option( self::OPTION_NAME, null );
+		if ( is_array( $saved ) ) {
+			return $saved;
+		}
+
+		return array();
 	}
 
 	/**
@@ -508,11 +503,6 @@ final class AEM_WhatsNew {
 				'label' => self::t( 'label_empty_text' ),
 				'desc'  => self::t( 'desc_empty_text' ),
 			),
-			'custom_css'       => array(
-				'type'  => 'textarea',
-				'label' => self::t( 'label_custom_css' ),
-				'desc'  => self::t( 'desc_custom_css' ),
-			),
 			'ui_language'      => array(
 				'type'    => 'select',
 				'label'   => self::t( 'label_ui_language' ),
@@ -531,8 +521,8 @@ final class AEM_WhatsNew {
 	 */
 	public static function register_settings_page() {
 		add_options_page(
-			"What's New List by M.N.",
-			"What's New List by M.N.",
+			'Mngsk Recent Content List',
+			'Mngsk Recent Content List',
 			'manage_options',
 			self::SETTINGS_SLUG,
 			array( __CLASS__, 'render_settings_page' )
@@ -568,7 +558,6 @@ final class AEM_WhatsNew {
 			array(),
 			self::VERSION
 		);
-		self::ensure_custom_css();
 		wp_enqueue_style( self::STYLE_HANDLE );
 	}
 
@@ -586,7 +575,7 @@ final class AEM_WhatsNew {
 	 * 非同期ページネーション(pagination_mode="async")用のAjaxハンドラ。
 	 *
 	 * 公開済み投稿(post_status=publish)のみを返す読み取り専用のエンドポイントで、状態変更を
-	 * 一切行わない。閲覧できる内容は通常のショートコード表示(?whatsnew_page=N付きURL)で
+	 * 一切行わない。閲覧できる内容は通常のショートコード表示(専用URLパラメータ付きURL)で
 	 * 誰でも同じものを見られるため、CSRF対策のnonceは要求していない
 	 * (nonceを必須にすると、ページキャッシュ済みHTML内のnonceがキャッシュ有効期間中に
 	 * 期限切れになりAjaxが失敗し続ける、という別の不具合を生みやすいため)。
@@ -630,7 +619,7 @@ final class AEM_WhatsNew {
 		$allowed = array_flip( array_keys( self::hard_defaults() ) );
 		$atts    = array();
 		foreach ( $decoded as $key => $value ) {
-			if ( ! is_string( $key ) || ! isset( $allowed[ $key ] ) || 'custom_css' === $key ) {
+			if ( ! is_string( $key ) || ! isset( $allowed[ $key ] ) ) {
 				continue;
 			}
 			if ( ! is_scalar( $value ) ) {
@@ -682,7 +671,6 @@ final class AEM_WhatsNew {
 		$out['newmark_text']     = isset( $input['newmark_text'] ) ? sanitize_text_field( $input['newmark_text'] ) : self::t( 'default_newmark_text' );
 		$out['date_format']      = isset( $input['date_format'] ) ? sanitize_text_field( $input['date_format'] ) : '';
 		$out['empty_text']       = isset( $input['empty_text'] ) ? sanitize_text_field( $input['empty_text'] ) : '';
-		$out['custom_css']       = isset( $input['custom_css'] ) ? sanitize_textarea_field( $input['custom_css'] ) : '';
 		$out['ui_language']      = in_array( $input['ui_language'] ?? '', array( 'ja', 'en' ), true ) ? $input['ui_language'] : 'auto';
 
 		return $out;
@@ -874,7 +862,7 @@ final class AEM_WhatsNew {
 		$effective_total = 0;
 		if ( $paginate ) {
 			// 実際に取得する前に件数だけ数え、current_pageを総ページ数(上限反映後)の範囲に丸める。
-			// これをしないと、load_more(累積取得)でURLの?whatsnew_page=を大きくされた場合に
+			// これをしないと、load_more(累積取得)で専用URLパラメータを大きくされた場合に
 			// posts_per_page(= per_page * current_page)が際限なく膨らんでしまう。
 			$found_total     = self::count_matching_posts( $atts, $orderby );
 			$effective_total = $found_total;
@@ -903,34 +891,31 @@ final class AEM_WhatsNew {
 			: '';
 
 		wp_enqueue_style( self::STYLE_HANDLE );
-		self::ensure_custom_css();
 		if ( $paginate && 'async' === $pagination_mode ) {
 			wp_enqueue_script( self::SCRIPT_HANDLE );
 		}
 
 		$async_attrs = '';
 		if ( $paginate && 'async' === $pagination_mode ) {
-			$atts_for_js = $atts;
-			unset( $atts_for_js['custom_css'] ); // サイト全体設定であり、かつ長文になり得るためJS側には送らない。
-			$async_attrs  = ' data-aem-whatsnew-async="1"';
-			$async_attrs .= ' data-aem-whatsnew-atts="' . esc_attr( (string) wp_json_encode( $atts_for_js ) ) . '"';
+			$async_attrs  = ' data-mngsk-recent-content-async="1"';
+			$async_attrs .= ' data-mngsk-recent-content-atts="' . esc_attr( (string) wp_json_encode( $atts ) ) . '"';
 			// JS側が現在ページ・総ページ数をリンクのhrefを解析せず把握できるようにしておく。
 			// 「次ページの先読み(プリフェッチ)キャッシュ」の起点として使う。
-			$async_attrs .= ' data-aem-whatsnew-page="' . (int) $current_page . '"';
-			$async_attrs .= ' data-aem-whatsnew-max-pages="' . (int) $max_pages . '"';
+			$async_attrs .= ' data-mngsk-recent-content-page="' . (int) $current_page . '"';
+			$async_attrs .= ' data-mngsk-recent-content-max-pages="' . (int) $max_pages . '"';
 			if ( 'load_more' === $pagination_style ) {
-				$async_attrs .= ' data-aem-whatsnew-load-more="1"';
+				$async_attrs .= ' data-mngsk-recent-content-load-more="1"';
 			}
 		}
 
 		ob_start();
 		?>
-<div class="whatsnew"<?php echo $async_attrs; // phpcs:ignore WordPress.Security.EscapeOutput -- $async_attrsは組み立て時にesc_attr済み ?>>
+<div class="mngsk-recent-content"<?php echo $async_attrs; // phpcs:ignore WordPress.Security.EscapeOutput -- $async_attrsは組み立て時にesc_attr済み ?>>
 		<?php $show_header_pagination = ( $pagination_html && 'top_right' === $pagination_position ); ?>
 		<?php if ( '' !== $atts['title'] || $show_header_pagination ) : ?>
-	<div class="whatsnew-header">
+	<div class="mngsk-recent-content__header">
 			<?php if ( '' !== $atts['title'] ) : ?>
-		<<?php echo $title_tag; // phpcs:ignore WordPress.Security.EscapeOutput -- ALLOWED_TITLE_TAGSで検証済み ?> class="whatsnew-title"><?php echo esc_html( $atts['title'] ); ?></<?php echo $title_tag; // phpcs:ignore WordPress.Security.EscapeOutput ?>>
+		<<?php echo $title_tag; // phpcs:ignore WordPress.Security.EscapeOutput -- ALLOWED_TITLE_TAGSで検証済み ?> class="mngsk-recent-content__title"><?php echo esc_html( $atts['title'] ); ?></<?php echo $title_tag; // phpcs:ignore WordPress.Security.EscapeOutput ?>>
 			<?php endif; ?>
 			<?php if ( $show_header_pagination ) : ?>
 		<?php echo $pagination_html; // phpcs:ignore WordPress.Security.EscapeOutput -- render_pagination()内で組み立て時にエスケープ済み ?>
@@ -939,10 +924,10 @@ final class AEM_WhatsNew {
 		<?php endif; ?>
 		<?php if ( empty( $posts ) ) : ?>
 			<?php if ( '' !== $atts['empty_text'] ) : ?>
-	<p class="whatsnew-empty"><?php echo esc_html( $atts['empty_text'] ); ?></p>
+	<p class="mngsk-recent-content__empty"><?php echo esc_html( $atts['empty_text'] ); ?></p>
 			<?php endif; ?>
 		<?php else : ?>
-	<div class="whatsnew-content">
+	<div class="mngsk-recent-content__content">
 	<hr />
 			<?php foreach ( $posts as $index => $post ) : ?>
 				<?php
@@ -968,31 +953,31 @@ final class AEM_WhatsNew {
 
 				$title_markup = '';
 				if ( $is_new && '' !== trim( $newmark_text ) ) {
-					$title_markup .= '<span class="newmark">' . esc_html( $newmark_text ) . '</span> ';
+					$title_markup .= '<span class="mngsk-recent-content__newmark">' . esc_html( $newmark_text ) . '</span> ';
 				}
 				$title_markup .= esc_html( $title );
 				?>
-	<a class="whatsnew-item" href="<?php echo esc_url( (string) get_permalink( $post ) ); ?>">
+	<a class="mngsk-recent-content__item" href="<?php echo esc_url( (string) get_permalink( $post ) ); ?>">
 			<?php if ( $layout_inline ) : ?>
-		<div class="whatsnew-row">
-			<span class="whatsnew-date"><time datetime="<?php echo esc_attr( $datetime ); ?>"><?php echo esc_html( $date_text ); ?></time></span>
+		<div class="mngsk-recent-content__row">
+			<span class="mngsk-recent-content__date"><time datetime="<?php echo esc_attr( $datetime ); ?>"><?php echo esc_html( $date_text ); ?></time></span>
 				<?php if ( $show_type ) : ?>
-			<span class="whatsnew-type"><?php echo esc_html( self::post_type_label( $post ) ); ?></span>
+			<span class="mngsk-recent-content__type"><?php echo esc_html( self::post_type_label( $post ) ); ?></span>
 				<?php endif; ?>
 				<?php if ( $show_category ) : ?>
-			<span class="whatsnew-category"><?php echo esc_html( self::category_names_for_post( $post, $category_limit ) ); ?></span>
+			<span class="mngsk-recent-content__category"><?php echo esc_html( self::category_names_for_post( $post, $category_limit ) ); ?></span>
 				<?php endif; ?>
-			<span class="whatsnew-item-title"><?php echo $title_markup; // phpcs:ignore WordPress.Security.EscapeOutput -- $title_markupは組み立て時にesc_html済み ?></span>
+			<span class="mngsk-recent-content__item-title"><?php echo $title_markup; // phpcs:ignore WordPress.Security.EscapeOutput -- $title_markupは組み立て時にesc_html済み ?></span>
 		</div>
 			<?php else : ?>
 		<dl>
 			<dt><time datetime="<?php echo esc_attr( $datetime ); ?>"><?php echo esc_html( $date_text ); ?></time></dt>
-			<dd class="whatsnew-item-title"><?php echo $title_markup; // phpcs:ignore WordPress.Security.EscapeOutput -- $title_markupは組み立て時にesc_html済み ?></dd>
+			<dd class="mngsk-recent-content__item-title"><?php echo $title_markup; // phpcs:ignore WordPress.Security.EscapeOutput -- $title_markupは組み立て時にesc_html済み ?></dd>
 				<?php if ( $show_type ) : ?>
-			<dd class="whatsnew-type"><?php echo esc_html( self::post_type_label( $post ) ); ?></dd>
+			<dd class="mngsk-recent-content__type"><?php echo esc_html( self::post_type_label( $post ) ); ?></dd>
 				<?php endif; ?>
 				<?php if ( $show_category ) : ?>
-			<dd class="whatsnew-category"><?php echo esc_html( self::category_names_for_post( $post, $category_limit ) ); ?></dd>
+			<dd class="mngsk-recent-content__category"><?php echo esc_html( self::category_names_for_post( $post, $category_limit ) ); ?></dd>
 				<?php endif; ?>
 		</dl>
 			<?php endif; ?>
@@ -1027,7 +1012,7 @@ final class AEM_WhatsNew {
 		// ここでのSQL_CALC_FOUND_ROWSは常に無効化しておく。
 		$args['no_found_rows']  = true;
 
-		$args = apply_filters( 'aem_whatsnew_query_args', $args, $atts );
+		$args = apply_filters( 'mngsk_recent_content_query_args', $args, $atts );
 
 		return new WP_Query( $args );
 	}
@@ -1044,7 +1029,7 @@ final class AEM_WhatsNew {
 		$args['no_found_rows']  = false;
 		$args['fields']         = 'ids';
 
-		$args = apply_filters( 'aem_whatsnew_query_args', $args, $atts );
+		$args = apply_filters( 'mngsk_recent_content_query_args', $args, $atts );
 
 		$query = new WP_Query( $args );
 
@@ -1140,22 +1125,22 @@ final class AEM_WhatsNew {
 
 		if ( 'load_more' === $style ) {
 			$inner       = self::pagination_inner_load_more( $current_page, $max_pages );
-			$style_class = 'whatsnew-pagination-load-more';
+			$style_class = 'mngsk-recent-content__pagination--load-more';
 		} elseif ( 'prev_next' === $style ) {
 			$inner       = self::pagination_inner_prev_next( $current_page, $max_pages );
-			$style_class = 'whatsnew-pagination-prev-next';
+			$style_class = 'mngsk-recent-content__pagination--prev-next';
 		} else {
 			$inner       = self::pagination_inner_numbers( $current_page, $max_pages );
-			$style_class = 'whatsnew-pagination-numbers';
+			$style_class = 'mngsk-recent-content__pagination--numbers';
 		}
 
 		if ( '' === $inner ) {
 			return '';
 		}
 
-		$position_class = 'whatsnew-pagination-pos-' . str_replace( '_', '-', $position );
+		$position_class = 'mngsk-recent-content__pagination--pos-' . str_replace( '_', '-', $position );
 
-		return '<nav class="whatsnew-pagination ' . $style_class . ' ' . $position_class . '" aria-label="Pagination">' . $inner . '</nav>';
+		return '<nav class="mngsk-recent-content__pagination ' . $style_class . ' ' . $position_class . '" aria-label="Pagination">' . $inner . '</nav>';
 	}
 
 	/**
@@ -1206,7 +1191,7 @@ final class AEM_WhatsNew {
 
 		$next_url = add_query_arg( self::PAGE_QUERY_VAR, $current_page + 1 );
 
-		return '<a class="whatsnew-load-more" href="' . esc_url( $next_url ) . '">' . esc_html( self::t( 'load_more_text' ) ) . '</a>';
+		return '<a class="mngsk-recent-content__load-more" href="' . esc_url( $next_url ) . '">' . esc_html( self::t( 'load_more_text' ) ) . '</a>';
 	}
 
 	/**
@@ -1467,28 +1452,6 @@ final class AEM_WhatsNew {
 		return implode( ', ', $names );
 	}
 
-	/**
-	 * 設定画面で保存したカスタムCSSを、1リクエストにつき1回だけ登録済みスタイルに追加する。
-	 *
-	 * ショートコードが同一ページに複数回出現しても重複出力しないよう静的フラグで制御する。
-	 */
-	private static function ensure_custom_css() {
-		static $added = false;
-		if ( $added ) {
-			return;
-		}
-		$added = true;
-
-		$css = trim( (string) ( self::defaults()['custom_css'] ?? '' ) );
-		if ( '' === $css ) {
-			return;
-		}
-
-		// <style>タグ内に出力されるため、閉じタグ文字列だけ念のためエスケープしておく。
-		$css = str_replace( '</style', '<\/style', $css );
-
-		wp_add_inline_style( self::STYLE_HANDLE, $css );
-	}
 }
 
-AEM_WhatsNew::boot();
+Mngsk_Recent_Content_List::boot();

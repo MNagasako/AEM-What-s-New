@@ -1,199 +1,59 @@
-=== What's New List by M.N. ===
-Contributors: mnagasako
-Tags: shortcode, whats-new, news, recent-posts, category
+=== Mngsk Recent Content List ===
+Contributors: nagasako
+Tags: shortcode, news, recent-posts, category
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.5.10
+Stable tag: 1.6.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-A lightweight "what's new" list plugin. Works with WordPress core APIs (WP_Query + Shortcode API) only — no build step, no external libraries.
+Display a configurable list of recent posts and pages with a distinctive shortcode and theme-ready CSS classes.
 
 == Description ==
 
-The `[aem_whatsnew]` shortcode displays a simple list of recent posts/pages, optionally filtered by category.
+Use `[mngsk_recent_content]` to display recent published posts or pages. It uses WordPress core APIs only and has no external dependencies or build step.
 
-* Included/excluded categories can be specified by slug, name, or ID — the same shortcode works across multiple sites even when category IDs differ.
-* The "NEW!" mark's duration, post types, and sort order (publish/modified date) are all configurable via shortcode attributes.
-* Optional category and post-type columns, a title character limit, a customizable "NEW!" mark string, and a custom-CSS box in the settings screen.
-* An optional single-line layout (date, type, category, and title in one row) in addition to the default stacked layout.
-* Optional pagination (`pagination="yes"`), using a dedicated `?whatsnew_page=N` query argument so it never collides with archive pagination or in-post `<!--nextpage-->` breaks. Choose sync (normal links) or async (in-place Ajax update) mode, a numbered/prev-next/"load more" style, a bottom-left/bottom-right/top-right position, and optionally cap the total number of items reachable via pagination.
-* Optional date-range filtering (`date_from` / `date_to`) and a Japanese-era ("wareki") date format option (`date_format="wareki"`, e.g. "令和7年7月27日").
-* A "Settings > What's New List by M.N." admin screen (with a live preview) lets you edit all of the above defaults without touching a shortcode. Explicit shortcode attributes always win over the saved settings.
-* The admin screen and the built-in default text (heading, "NEW!" mark, empty-state text) can be shown in Japanese or English, either automatically (based on the site's language) or forced manually.
-* Uses `WP_Query` (not `get_posts()` with filters suppressed), so plugins like User Access Manager that restrict post visibility are respected — restricted posts never leak into the list.
-* Designed as a drop-in replacement for the discontinued "What's New Generator" plugin: it registers the same `[showwhatsnew]` shortcode automatically, but only while the old plugin is not active, so both can be enabled at once during migration.
+* Filter by category, post type, date range, or individual post IDs.
+* Configure the title, date format, NEW! mark, list layout, and optional category and post-type labels.
+* Choose normal or in-place asynchronous pagination, including numbered, previous/next, and load-more styles.
+* Use the Settings screen to set site-wide defaults, with a live preview.
+* Style the output from the theme's Additional CSS feature using the documented `mngsk-recent-content` CSS classes. This plugin does not accept or output arbitrary CSS.
 
-See the [README](https://github.com/MNagasako/AEM-What-s-New) on GitHub for the full attribute reference and examples.
-
-= Acknowledgments =
-
-Many thanks to Hideki Tanaka (WordPress.org username `hidakabizplugin`), author of the WordPress plugin "What's New Generator" (slug: `whats-new-genarator`), which this project replaces after years of use on our site.
-
-That plugin was closed on WordPress.org on 2024-06-15 for a security issue and is no longer downloadable (its last release was 2.0.2). Since the source and detailed specification were no longer available to us, this plugin was written from scratch using WordPress core APIs only, based on observing the original plugin's output and configured behavior on our production site rather than reusing any of its code.
+The primary CSS classes are `.mngsk-recent-content`, `__title`, `__item`, `__date`, `__type`, `__category`, `__newmark`, and `__pagination`.
 
 == Installation ==
 
-1. Copy the `whats-new-list-by-m-n` folder into `wp-content/plugins/`.
-2. Activate **What's New List by M.N.** from the Plugins screen.
-3. Insert `[aem_whatsnew]` into any page or post where you want the list to appear.
+1. Upload the `mngsk-recent-content-list` folder to `/wp-content/plugins/`, or install the ZIP from the Plugins screen.
+2. Activate **Mngsk Recent Content List**.
+3. Insert `[mngsk_recent_content]` into a page or post.
 
-Default display values can be changed from "Settings > What's New List by M.N." (with a live preview). Attributes set explicitly on the shortcode always take priority over these settings.
+Set defaults at **Settings > Mngsk Recent Content List**. Explicit shortcode attributes take priority.
 
 == Frequently Asked Questions ==
 
-= Do I have to use numeric category IDs? =
+= Can I include pages? =
 
-No. You can use a category name or slug, e.g. `category="announcements"`. A value is only treated as an ID when it is purely numeric.
+Yes. `post_type="post,page"` is the default.
 
-= Can this run alongside "What's New Generator"? =
+= How can I change the appearance? =
 
-Yes, temporarily. If the old plugin's `[showwhatsnew]` shortcode is already registered, this plugin will not override it, so both plugins can be active at once during migration.
-
-= Can pages be included in the list, not just posts? =
-
-Yes — set `post_type="post,page"` (this is already the default). Use `post_type="post"` to restrict it to posts only.
-
-= Can I change the admin screen language? =
-
-Yes. The "Admin screen & default text language" setting supports Auto (follows the site's language), Japanese, or English.
-
-= Can I show dates in the Japanese era (wareki) format? =
-
-Yes. Set `date_format="wareki"` (or the same value in the settings screen) to render dates like "令和7年7月27日" instead of a PHP `date()` pattern. All eras from Meiji onward are supported.
+Use your theme's Additional CSS feature or the Site Editor. Target the plugin's `mngsk-recent-content` CSS classes; the plugin has no custom-CSS input field.
 
 = Does pagination require JavaScript? =
 
-Only if you set `pagination_mode="async"`. The default, `sync`, uses normal link navigation and works without JavaScript. Async mode loads a small bundled script (`aem-whatsnew.js`, no build step) and updates the list in place via `admin-ajax.php`.
+Only `pagination_mode="async"`. The default `sync` mode works with ordinary links and no JavaScript.
 
 == Changelog ==
 
-= 1.5.10 =
-* Aligned the plugin text domain with the WordPress.org directory slug.
+= 1.6.1 =
+* Renamed packaged files and completed documentation updates for the `mngsk` public identifiers.
 
-= 1.5.9 =
-* Renamed the public plugin title to What's New List by M.N. to avoid ambiguity with unrelated products and trademarks.
-
-= 1.5.8 =
-* Fixed the final Plugin Check warning for the public async-pagination request sanitizer.
-
-= 1.5.7 =
-* Normalized the main PHP file's line endings for consistent static analysis.
-* Sanitized public async-pagination request values before decoding them, while retaining strict size, type, and allow-list validation.
-* Documented the bounded, user-configured post-ID exclusion query for Plugin Check.
-
-= 1.5.6 =
-* Prevented stale async responses from overwriting a newer pagination click.
-* Load the async pagination script only when async pagination is enabled.
-
-= 1.5.5 =
-* Hardened the public async-pagination endpoint: it now accepts only bounded scalar attributes and rejects malformed requests.
-* Fixed `pagination_max_items` so the final page never exceeds the configured item limit.
-* Fixed synchronous pagination and the `newmark_latest` marker on later pages.
-* Made async "Load more" fetch and append only the next page, avoiding repeated cumulative queries.
-* Fixed Japanese-era boundaries to use the site's configured timezone, and added the production-only 1.5.3 async-prefetch and Wareki format enhancements to this source repository.
-
-= 1.5.3 =
-* Fixed Wareki keyword suffixes so PHP date-format tokens after the keyword are evaluated against the post timestamp.
-
-= 1.5.2 =
-* Fixed Wareki keywords with trailing literal text, such as `wareki_year_02d年`.
-
-= 1.5.1 =
-* Added async pagination prefetch/cache behavior and three era-year-only Wareki date formats.
-
-= 1.5.0 =
-* Added pagination mode (`pagination_mode`: sync/async), style (`pagination_style`: numbers/prev_next/load_more), and position (`pagination_position`: bottom-left/bottom-right/top-right-next-to-heading).
-* Added a pagination item cap (`pagination_max_items`) and date-range filtering (`date_from`/`date_to`).
-* Added a Japanese-era ("wareki") date format option (`date_format="wareki"`).
-* Reorganized the README's usage section into grouped attribute tables now that the shortcode has grown to two dozen attributes.
-
-= 1.4.0 =
-* Added optional pagination (`pagination`: yes/no). When enabled, "Number of items" becomes the per-page count and the list can be paged via a dedicated `?whatsnew_page=N` query argument (not WordPress's own `paged`, to avoid colliding with archive pagination or `<!--nextpage-->`).
-
-= 1.3.0 =
-* Added a `layout` option: the default "stacked" layout, or a new "inline" layout that puts date/type/category/title on a single row.
-* Added a Japanese/English switch (`ui_language`: auto/ja/en) for the admin screen and the built-in default text.
-* readme.txt is now primarily in English, with a Japanese section at the end, ahead of a planned WordPress.org submission.
-
-= 1.2.0 =
-* Added optional category and post-type columns (`show_category`/`show_type`; `category_limit` caps how many categories are listed per item).
-* Added a title character limit (`title_max_length`; overflow is replaced with "…").
-* The "NEW!" mark text is now editable (`newmark_text`).
-* Added a "Custom CSS" box in the settings screen, loaded in addition to the bundled stylesheet, to restyle the "NEW!" mark and the list layout.
-
-= 1.1.1 =
-* The "Post types" setting changed from free text to checkboxes, automatically listing the site's actual public post types.
-
-= 1.1.0 =
-* Added a settings admin screen with a live preview, covering every shortcode default. Explicit shortcode attributes still take priority.
-
-= 1.0.0 =
-* Initial release. Packaged from the version already running in production on the Institute for Materials Research (Tohoku University) AEM/analytical electron microscopy site, as a replacement for the external "What's New Generator" plugin.
+= 1.6.0 =
+* Renamed the plugin and public identifiers with the distinctive `mngsk` prefix.
+* Removed the arbitrary Custom CSS setting; use theme CSS classes instead.
 
 == Upgrade Notice ==
 
-= 1.5.10 =
-Aligns the plugin text domain with the WordPress.org directory slug.
-
-= 1.5.9 =
-Renames the public plugin title to What's New List by M.N.
-
-= 1.5.8 =
-Completes the Plugin Check remediation for the public async-pagination endpoint.
-
-= 1.5.7 =
-Improves WordPress.org Plugin Check compatibility for the public async-pagination endpoint.
-
-= 1.5.6 =
-Improves async pagination reliability and avoids loading its script for ordinary lists.
-
-= 1.5.5 =
-Fixes pagination correctness and hardens the public async endpoint. No shortcode changes are required.
-
-= 1.5.3 =
-Fixes Wareki suffix date-format evaluation.
-
-= 1.5.2 =
-Fixes Wareki keywords with trailing literal text.
-
-= 1.5.1 =
-Adds async pagination prefetch/cache and additional Wareki year formats.
-
-= 1.5.0 =
-Adds pagination mode/style/position, an item cap, date-range filtering, and a Japanese-era date format. No visual change unless you opt in.
-
-= 1.4.0 =
-Adds optional pagination. Off by default — no visual change unless you opt in.
-
-= 1.3.0 =
-Adds an inline layout option and a Japanese/English display-language switch. No visual change unless you opt in.
-
-= 1.2.0 =
-Adds category/type columns, a title length limit, a custom "NEW!" string, and custom CSS. Everything defaults to off — no visual change unless you opt in.
-
-= 1.1.1 =
-The "Post types" setting is now a checkbox list. Existing saved values are carried over automatically.
-
-= 1.1.0 =
-Adds a settings admin screen. No effect on existing shortcode usage.
-
-= 1.0.0 =
-Initial release.
-
-== 日本語 (Japanese) ==
-
-トップページ等に「新着情報」一覧を表示する軽量プラグイン。WordPress標準API(WP_Query + ショートコードAPI)だけで動作し、ビルド手順や外部ライブラリは不要です。
-
-`[aem_whatsnew]` ショートコードで、指定カテゴリの新着記事一覧をシンプルなリストとして表示します。対象/除外カテゴリはスラッグ・カテゴリ名・IDのいずれでも指定可能、`NEW!`マークの表示日数・投稿種別・並び順・期間(開始日/終了日)なども属性で調整できます。カテゴリ列・投稿タイプ列の追加表示、タイトルの文字数制限、`NEW!`マーク文言の変更、レイアウト(積み重ね/1行)の切り替え、和暦表示(`date_format="wareki"`)、カスタムCSSによる見た目の上書きにも対応しています。
-
-ページネーション(専用クエリ引数`?whatsnew_page=N`使用)は、方式(同期/非同期Ajax)・スタイル(番号付き/前へ次へのみ/もっと見るボタン)・表示位置(一覧の下・左右/見出しの右端)・件数上限を組み合わせて設定できます。
-
-「設定 > What's New List by M.N.」の管理画面(プレビュー付き)から、ショートコードを書かずに既定値を編集できます(ショートコード属性を明示指定した場合はそちらが優先)。管理画面表示・既定文言は日本語/英語を自動または手動で切り替え可能です。
-
-`WP_Query`を使って一覧を取得するため、User Access Manager等の閲覧制限プラグインと併用しても、権限のない記事は一覧に出ません。
-
-旧プラグイン「What's New Generator」(Hideki Tanaka氏作、WordPress.orgスラッグ`whats-new-genarator`)からの移行を想定し、同名ショートコード`[showwhatsnew]`も(旧プラグインが有効でない場合に限り)自動登録します。同プラグインは2024年6月15日付でセキュリティ上の問題によりWordPress.orgから公開停止となっており、本プラグインはそのソースコードを流用せず、本番サイトでの出力・挙動の観察をもとにゼロから独自に再実装したものです。
-
-属性の全一覧・使用例など詳細は [GitHubのREADME](https://github.com/MNagasako/AEM-What-s-New) を参照してください。
+= 1.6.1 =
+Use `[mngsk_recent_content]`; earlier shortcode names are no longer registered.
