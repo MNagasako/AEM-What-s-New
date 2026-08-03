@@ -46,3 +46,9 @@ WordPressの投稿・固定ページから新着一覧を表示する軽量プ�
 - PHP 7.4以上
 
 ライセンスは GPL-2.0-or-later です。
+
+## WordPress.org
+
+本プラグインはWordPress.orgで公開済みです。最新版は次のページから入手できます。
+
+<https://wordpress.org/plugins/mngsk-recent-content-list/>
