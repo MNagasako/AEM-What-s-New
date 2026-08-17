@@ -1130,7 +1130,7 @@ final class Mngsk_Recent_Content_List {
 						'value'   => $locale,
 						'compare' => '=',
 					);
-					$args['meta_query'] = $meta_query;
+					$args['meta_query'] = $meta_query; // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
 				}
 			}
 		}
