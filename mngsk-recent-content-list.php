@@ -3,7 +3,7 @@
  * Plugin Name: Mngsk Recent Content List
  * Plugin URI:  https://github.com/MNagasako/AEM-What-s-New
  * Description: 新着情報一覧をWordPress標準API(WP_Query + ショートコードAPI)だけで表示する。外部プラグイン「What's New Generator」の置き換え。
- * Version:     1.6.3
+ * Version:     1.6.4
  * Author:      M.N.
  * License:     GPL-2.0-or-later
  * Requires at least: 6.0
@@ -19,7 +19,7 @@ if ( ! class_exists( 'Mngsk_Recent_Content_List' ) ) {
 
 final class Mngsk_Recent_Content_List {
 
-	const VERSION           = '1.6.3';
+	const VERSION           = '1.6.4';
 	const SHORTCODE         = 'mngsk_recent_content';
 	const STYLE_HANDLE      = 'mngsk-recent-content';
 	const OPTION_NAME       = 'mngsk_recent_content_options';
@@ -937,16 +937,27 @@ final class Mngsk_Recent_Content_List {
 
 		// "load_more"はページを重ねるごとに一覧を積み増す仕様のため、都度「先頭からNページ分」を
 		// 一括取得する(offsetで切り出す通常のページ送りとは異なり、常にpaged=1で件数だけ増やす)。
+		// 一方で通常・前へ次へのページネーション(およびAjaxでのもっと見る追加取得)は、
+		// WP_Queryのオフセット計算((paged-1)*posts_per_page)がずれて前ページの投稿と重複するのを防ぐため、
+		// posts_per_pageには常に固定の$per_pageを渡す。
 		$is_cumulative  = ( $paginate && 'load_more' === $pagination_style && ! $incremental_load_more );
-		$remaining_items = $paginate ? max( 0, $effective_total - ( ( $current_page - 1 ) * $per_page ) ) : $per_page;
 		$query_per_page = $is_cumulative
 			? min( $per_page * $current_page, $effective_total )
-			: min( $per_page, $remaining_items );
+			: $per_page;
 		$query_per_page = max( 1, $query_per_page );
 		$query_paged    = $is_cumulative ? 1 : $current_page;
 
 		$query = self::query_posts( $atts, $orderby, $query_paged, $query_per_page, $active_locale );
 		$posts = $query->posts;
+
+		// ページネーションの件数上限(pagination_max_items)が指定されている場合、
+		// 最終ページで上限件数を超える余剰記事を切り詰める。
+		if ( $paginate && $max_items > 0 && is_array( $posts ) && ! empty( $posts ) ) {
+			$allowed_count = max( 0, $effective_total - ( ( $current_page - 1 ) * $per_page ) );
+			if ( count( $posts ) > $allowed_count ) {
+				$posts = array_slice( $posts, 0, $allowed_count );
+			}
+		}
 
 		$pagination_html = $paginate
 			? self::render_pagination( $current_page, $max_pages, $pagination_style, $pagination_position, $request_url )

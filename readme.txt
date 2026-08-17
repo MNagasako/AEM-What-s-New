@@ -4,7 +4,7 @@ Tags: shortcode, news, recent-posts, category
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.6.3
+Stable tag: 1.6.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -45,6 +45,9 @@ Use your theme's Additional CSS feature or the Site Editor. Target the plugin's 
 Only `pagination_mode="async"`. The default `sync` mode works with ordinary links and no JavaScript.
 
 == Changelog ==
+
+= 1.6.4 =
+* Fixed pagination offset calculation on subsequent pages to prevent entries from overlapping between pages.
 
 = 1.6.3 =
 * Fixed initial pagination page count in multilingual (Bogo) setups by ensuring language meta query is applied during initial page render.
