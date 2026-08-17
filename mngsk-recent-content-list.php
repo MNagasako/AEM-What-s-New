@@ -3,7 +3,7 @@
  * Plugin Name: Mngsk Recent Content List
  * Plugin URI:  https://github.com/MNagasako/AEM-What-s-New
  * Description: 新着情報一覧をWordPress標準API(WP_Query + ショートコードAPI)だけで表示する。外部プラグイン「What's New Generator」の置き換え。
- * Version:     1.6.2
+ * Version:     1.6.3
  * Author:      M.N.
  * License:     GPL-2.0-or-later
  * Requires at least: 6.0
@@ -19,7 +19,7 @@ if ( ! class_exists( 'Mngsk_Recent_Content_List' ) ) {
 
 final class Mngsk_Recent_Content_List {
 
-	const VERSION           = '1.6.2';
+	const VERSION           = '1.6.3';
 	const SHORTCODE         = 'mngsk_recent_content';
 	const STYLE_HANDLE      = 'mngsk-recent-content';
 	const OPTION_NAME       = 'mngsk_recent_content_options';
@@ -1120,18 +1120,17 @@ final class Mngsk_Recent_Content_List {
 			// Polylang / 標準多言語クエリ引数
 			$args['lang'] = $locale;
 
-			// Ajax通信時(is_admin()===true)は、Bogoのフロントエンド言語フィルターが自動適用されないため、
-			// Bogoの投稿メタ(_locale)による絞り込みを明示的に付与する。
-			if ( wp_doing_ajax() || is_admin() ) {
-				if ( function_exists( 'bogo_get_locale' ) || defined( 'BOGO_VERSION' ) ) {
-					$meta_query = isset( $args['meta_query'] ) && is_array( $args['meta_query'] ) ? $args['meta_query'] : array();
-					$meta_query[] = array(
-						'key'     => '_locale',
-						'value'   => $locale,
-						'compare' => '=',
-					);
-					$args['meta_query'] = $meta_query; // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				}
+			// Bogoプラグインが有効な環境では、カスタムWP_Queryに対して自動で言語絞り込みが
+			// 適用されない(メインクエリ以外はBogoが除外される)ため、初回表示・Ajax問わず、
+			// 投稿メタ(_locale)による絞り込みを明示的に付与する。
+			if ( function_exists( 'bogo_get_locale' ) || defined( 'BOGO_VERSION' ) ) {
+				$meta_query = isset( $args['meta_query'] ) && is_array( $args['meta_query'] ) ? $args['meta_query'] : array();
+				$meta_query[] = array(
+					'key'     => '_locale',
+					'value'   => $locale,
+					'compare' => '=',
+				);
+				$args['meta_query'] = $meta_query; // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
 			}
 		}
 
