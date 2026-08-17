@@ -4,7 +4,7 @@ Tags: shortcode, news, recent-posts, category
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.6.1
+Stable tag: 1.6.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -45,6 +45,10 @@ Use your theme's Additional CSS feature or the Site Editor. Target the plugin's 
 Only `pagination_mode="async"`. The default `sync` mode works with ordinary links and no JavaScript.
 
 == Changelog ==
+
+= 1.6.2 =
+* Added multilingual support (Bogo, Polylang) for asynchronous pagination, ensuring language filtering is preserved during Ajax page navigation.
+* Preserved originating page URLs in Ajax-generated pagination links.
 
 = 1.6.1 =
 * Renamed packaged files and completed documentation updates for the `mngsk` public identifiers.

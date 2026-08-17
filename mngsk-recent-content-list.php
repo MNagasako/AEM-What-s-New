@@ -3,7 +3,7 @@
  * Plugin Name: Mngsk Recent Content List
  * Plugin URI:  https://github.com/MNagasako/AEM-What-s-New
  * Description: 新着情報一覧をWordPress標準API(WP_Query + ショートコードAPI)だけで表示する。外部プラグイン「What's New Generator」の置き換え。
- * Version:     1.6.1
+ * Version:     1.6.2
  * Author:      M.N.
  * License:     GPL-2.0-or-later
  * Requires at least: 6.0
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 final class Mngsk_Recent_Content_List {
 
-	const VERSION           = '1.6.1';
+	const VERSION           = '1.6.2';
 	const SHORTCODE         = 'mngsk_recent_content';
 	const STYLE_HANDLE      = 'mngsk-recent-content';
 	const OPTION_NAME       = 'mngsk_recent_content_options';
@@ -554,7 +554,7 @@ final class Mngsk_Recent_Content_List {
 
 		wp_register_style(
 			self::STYLE_HANDLE,
-			plugins_url( 'aem-whatsnew.css', __FILE__ ),
+			plugins_url( 'mngsk-recent-content-list.css', __FILE__ ),
 			array(),
 			self::VERSION
 		);
@@ -582,7 +582,7 @@ final class Mngsk_Recent_Content_List {
 	 * 送信された$attsはrender()内部のshortcode_atts()・各種min/max制限を必ず経由するため、
 	 * クライアントから任意の値を渡されても安全側に丸められる。
 	 *
-	 * aem-whatsnew.js側の先読み(プリフェッチ)・ホバー先読みも同じこのエンドポイントを叩く
+	 * mngsk-recent-content-list.js側の先読み(プリフェッチ)・ホバー先読みも同じこのエンドポイントを叩く
 	 * (表示に使うか、クライアント側キャッシュに保持するだけかはJS側の判断で、サーバー側の
 	 * 処理はクリック時と変わらない)。
 	 */
@@ -591,7 +591,31 @@ final class Mngsk_Recent_Content_List {
 		$page = isset( $_POST['page'] ) ? absint( $_POST['page'] ) : 1; // phpcs:ignore WordPress.Security.NonceVerification.Missing
 		$incremental_load_more = isset( $_POST['incremental_load_more'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['incremental_load_more'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
 
-		wp_send_json_success( array( 'html' => self::render_list( $atts, max( 1, $page ), $incremental_load_more ) ) );
+		$locale = '';
+		if ( isset( $_POST['locale'] ) && is_string( $_POST['locale'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
+			$raw_locale = sanitize_text_field( wp_unslash( $_POST['locale'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			if ( preg_match( '/^[a-zA-Z0-9_-]{2,30}$/', $raw_locale ) ) {
+				$locale = $raw_locale;
+			}
+		}
+
+		$current_url = '';
+		if ( isset( $_POST['current_url'] ) && is_string( $_POST['current_url'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
+			$current_url = esc_url_raw( wp_unslash( $_POST['current_url'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		}
+
+		$switched = false;
+		if ( '' !== $locale && function_exists( 'switch_to_locale' ) ) {
+			$switched = switch_to_locale( $locale );
+		}
+
+		$html = self::render_list( $atts, max( 1, $page ), $incremental_load_more, $locale, $current_url );
+
+		if ( $switched && function_exists( 'restore_previous_locale' ) ) {
+			restore_previous_locale();
+		}
+
+		wp_send_json_success( array( 'html' => $html ) );
 	}
 
 	/**
@@ -696,7 +720,7 @@ final class Mngsk_Recent_Content_List {
 			<?php foreach ( self::fields() as $key => $field ) : ?>
 			<tr>
 				<th scope="row">
-					<label for="aem-whatsnew-<?php echo esc_attr( $key ); ?>"><?php echo esc_html( $field['label'] ); ?></label>
+					<label for="mngsk-recent-content-<?php echo esc_attr( $key ); ?>"><?php echo esc_html( $field['label'] ); ?></label>
 				</th>
 				<td>
 					<?php self::render_field( $key, $field, $options[ $key ] ?? '' ); ?>
@@ -723,7 +747,7 @@ final class Mngsk_Recent_Content_List {
 	 * 設定画面の1フィールド分の入力欄を出力する。
 	 */
 	private static function render_field( $key, array $field, $value ) {
-		$id   = 'aem-whatsnew-' . $key;
+		$id   = 'mngsk-recent-content-' . $key;
 		$name = self::OPTION_NAME . '[' . $key . ']';
 
 		switch ( $field['type'] ) {
@@ -811,12 +835,48 @@ final class Mngsk_Recent_Content_List {
 	}
 
 	/**
-	 * @param array    $atts                  ショートコード属性。
-	 * @param int|null $forced_page           Ajaxから指定するページ番号。通常表示ではnull。
-	 * @param bool     $incremental_load_more Ajaxの「もっと見る」で、当該ページ分だけを返すかどうか。
+	 * 現在のリクエストにおける有効なロケールを取得する。
+	 * Bogo または WordPress の標準関数から判定する。
+	 *
+	 * @return string
 	 */
-	private static function render_list( $atts = array(), $forced_page = null, $incremental_load_more = false ) {
+	private static function current_locale() {
+		if ( function_exists( 'bogo_get_locale' ) ) {
+			return (string) bogo_get_locale();
+		}
+		if ( function_exists( 'determine_locale' ) ) {
+			return (string) determine_locale();
+		}
+
+		return (string) get_locale();
+	}
+
+	/**
+	 * 現在のリクエストURLを取得する(ページネーションのbase URL用)。
+	 *
+	 * @return string
+	 */
+	private static function current_request_url() {
+		if ( ! empty( $_SERVER['HTTP_HOST'] ) && ! empty( $_SERVER['REQUEST_URI'] ) ) {
+			$scheme = is_ssl() ? 'https://' : 'http://';
+			return esc_url_raw( $scheme . wp_unslash( $_SERVER['HTTP_HOST'] ) . wp_unslash( $_SERVER['REQUEST_URI'] ) );
+		}
+
+		return home_url( '/' );
+	}
+
+	/**
+	 * @param array       $atts                  ショートコード属性。
+	 * @param int|null    $forced_page           Ajaxから指定するページ番号。通常表示ではnull。
+	 * @param bool        $incremental_load_more Ajaxの「もっと見る」で、当該ページ分だけを返すかどうか。
+	 * @param string      $forced_locale         Ajaxから指定するロケール(空で通常判定)。
+	 * @param string      $base_url              ページネーションの基準URL(Ajax時は元のページURL)。
+	 */
+	private static function render_list( $atts = array(), $forced_page = null, $incremental_load_more = false, $forced_locale = '', $base_url = '' ) {
 		$atts = shortcode_atts( self::defaults(), $atts, self::SHORTCODE );
+
+		$active_locale   = ( '' !== $forced_locale ) ? $forced_locale : self::current_locale();
+		$request_url     = ( '' !== $base_url ) ? $base_url : self::current_request_url();
 
 		$title_tag       = in_array( $atts['title_tag'], self::ALLOWED_TITLE_TAGS, true ) ? $atts['title_tag'] : 'p';
 		$title_max_len   = max( 0, (int) $atts['title_max_length'] );
@@ -864,7 +924,7 @@ final class Mngsk_Recent_Content_List {
 			// 実際に取得する前に件数だけ数え、current_pageを総ページ数(上限反映後)の範囲に丸める。
 			// これをしないと、load_more(累積取得)で専用URLパラメータを大きくされた場合に
 			// posts_per_page(= per_page * current_page)が際限なく膨らんでしまう。
-			$found_total     = self::count_matching_posts( $atts, $orderby );
+			$found_total     = self::count_matching_posts( $atts, $orderby, $active_locale );
 			$effective_total = $found_total;
 			if ( $max_items > 0 ) {
 				$effective_total = min( $effective_total, $max_items );
@@ -883,11 +943,11 @@ final class Mngsk_Recent_Content_List {
 		$query_per_page = max( 1, $query_per_page );
 		$query_paged    = $is_cumulative ? 1 : $current_page;
 
-		$query = self::query_posts( $atts, $orderby, $query_paged, $query_per_page );
+		$query = self::query_posts( $atts, $orderby, $query_paged, $query_per_page, $active_locale );
 		$posts = $query->posts;
 
 		$pagination_html = $paginate
-			? self::render_pagination( $current_page, $max_pages, $pagination_style, $pagination_position )
+			? self::render_pagination( $current_page, $max_pages, $pagination_style, $pagination_position, $request_url )
 			: '';
 
 		wp_enqueue_style( self::STYLE_HANDLE );
@@ -899,6 +959,8 @@ final class Mngsk_Recent_Content_List {
 		if ( $paginate && 'async' === $pagination_mode ) {
 			$async_attrs  = ' data-mngsk-recent-content-async="1"';
 			$async_attrs .= ' data-mngsk-recent-content-atts="' . esc_attr( (string) wp_json_encode( $atts ) ) . '"';
+			$async_attrs .= ' data-mngsk-recent-content-locale="' . esc_attr( $active_locale ) . '"';
+			$async_attrs .= ' data-mngsk-recent-content-url="' . esc_url( $request_url ) . '"';
 			// JS側が現在ページ・総ページ数をリンクのhrefを解析せず把握できるようにしておく。
 			// 「次ページの先読み(プリフェッチ)キャッシュ」の起点として使う。
 			$async_attrs .= ' data-mngsk-recent-content-page="' . (int) $current_page . '"';
@@ -1003,8 +1065,8 @@ final class Mngsk_Recent_Content_List {
 	 *
 	 * @return WP_Query
 	 */
-	private static function query_posts( array $atts, $orderby, $paged, $posts_per_page ) {
-		$args = self::build_query_args( $atts, $orderby );
+	private static function query_posts( array $atts, $orderby, $paged, $posts_per_page, $locale = '' ) {
+		$args = self::build_query_args( $atts, $orderby, $locale );
 
 		$args['posts_per_page'] = max( 1, (int) $posts_per_page );
 		$args['paged']          = max( 1, (int) $paged );
@@ -1022,8 +1084,8 @@ final class Mngsk_Recent_Content_List {
 	 *
 	 * @return int
 	 */
-	private static function count_matching_posts( array $atts, $orderby ) {
-		$args                   = self::build_query_args( $atts, $orderby );
+	private static function count_matching_posts( array $atts, $orderby, $locale = '' ) {
+		$args                   = self::build_query_args( $atts, $orderby, $locale );
 		$args['posts_per_page'] = 1;
 		$args['paged']          = 1;
 		$args['no_found_rows']  = false;
@@ -1040,7 +1102,7 @@ final class Mngsk_Recent_Content_List {
 	 * query_posts()/count_matching_posts()で共有する、投稿タイプ・カテゴリ・除外・期間などの
 	 * 絞り込み条件(posts_per_page/paged/no_found_rows以外)を組み立てる。
 	 */
-	private static function build_query_args( array $atts, $orderby ) {
+	private static function build_query_args( array $atts, $orderby, $locale = '' ) {
 		$args = array(
 			'post_type'           => self::parse_post_types( $atts['post_type'] ),
 			'post_status'         => 'publish',
@@ -1051,6 +1113,25 @@ final class Mngsk_Recent_Content_List {
 			// カテゴリ列を表示する場合はget_the_category()がpost毎にDBを叩かないよう事前キャッシュする。
 			'update_post_term_cache' => self::is_truthy( $atts['show_category'] ?? 'no' ),
 		);
+
+		if ( '' !== $locale ) {
+			// Polylang / 標準多言語クエリ引数
+			$args['lang'] = $locale;
+
+			// Ajax通信時(is_admin()===true)は、Bogoのフロントエンド言語フィルターが自動適用されないため、
+			// Bogoの投稿メタ(_locale)による絞り込みを明示的に付与する。
+			if ( wp_doing_ajax() || is_admin() ) {
+				if ( function_exists( 'bogo_get_locale' ) || defined( 'BOGO_VERSION' ) ) {
+					$meta_query = isset( $args['meta_query'] ) && is_array( $args['meta_query'] ) ? $args['meta_query'] : array();
+					$meta_query[] = array(
+						'key'     => '_locale',
+						'value'   => $locale,
+						'compare' => '=',
+					);
+					$args['meta_query'] = $meta_query;
+				}
+			}
+		}
 
 		$date_query = array();
 		if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', (string) ( $atts['date_from'] ?? '' ) ) ) {
@@ -1117,20 +1198,20 @@ final class Mngsk_Recent_Content_List {
 	/**
 	 * ページネーションのリンク一覧をHTMLで返す(1ページしかない場合は空文字)。
 	 */
-	private static function render_pagination( $current_page, $max_pages, $style = 'numbers', $position = 'bottom_left' ) {
+	private static function render_pagination( $current_page, $max_pages, $style = 'numbers', $position = 'bottom_left', $base_url = '' ) {
 		$max_pages = (int) $max_pages;
 		if ( $max_pages <= 1 ) {
 			return '';
 		}
 
 		if ( 'load_more' === $style ) {
-			$inner       = self::pagination_inner_load_more( $current_page, $max_pages );
+			$inner       = self::pagination_inner_load_more( $current_page, $max_pages, $base_url );
 			$style_class = 'mngsk-recent-content__pagination--load-more';
 		} elseif ( 'prev_next' === $style ) {
-			$inner       = self::pagination_inner_prev_next( $current_page, $max_pages );
+			$inner       = self::pagination_inner_prev_next( $current_page, $max_pages, $base_url );
 			$style_class = 'mngsk-recent-content__pagination--prev-next';
 		} else {
-			$inner       = self::pagination_inner_numbers( $current_page, $max_pages );
+			$inner       = self::pagination_inner_numbers( $current_page, $max_pages, $base_url );
 			$style_class = 'mngsk-recent-content__pagination--numbers';
 		}
 
@@ -1146,8 +1227,10 @@ final class Mngsk_Recent_Content_List {
 	/**
 	 * スタイル「番号付き」: paginate_links()による通常のページ番号一覧(<nav>の中身のみ)。
 	 */
-	private static function pagination_inner_numbers( $current_page, $max_pages ) {
-		$base = add_query_arg( self::PAGE_QUERY_VAR, '%#%' );
+	private static function pagination_inner_numbers( $current_page, $max_pages, $base_url = '' ) {
+		$base = ( '' !== $base_url )
+			? add_query_arg( self::PAGE_QUERY_VAR, '%#%', $base_url )
+			: add_query_arg( self::PAGE_QUERY_VAR, '%#%' );
 
 		return (string) paginate_links(
 			array(
@@ -1165,15 +1248,19 @@ final class Mngsk_Recent_Content_List {
 	/**
 	 * スタイル「前へ/次へのみ」: 番号を出さず、前後のリンクだけを出す(<nav>の中身のみ)。
 	 */
-	private static function pagination_inner_prev_next( $current_page, $max_pages ) {
+	private static function pagination_inner_prev_next( $current_page, $max_pages, $base_url = '' ) {
 		$parts = array();
 
 		if ( $current_page > 1 ) {
-			$prev_url = add_query_arg( self::PAGE_QUERY_VAR, $current_page - 1 );
+			$prev_url = ( '' !== $base_url )
+				? add_query_arg( self::PAGE_QUERY_VAR, $current_page - 1, $base_url )
+				: add_query_arg( self::PAGE_QUERY_VAR, $current_page - 1 );
 			$parts[]  = '<a class="whatsnew-prev" href="' . esc_url( $prev_url ) . '">' . esc_html( self::t( 'pagination_prev' ) ) . '</a>';
 		}
 		if ( $current_page < $max_pages ) {
-			$next_url = add_query_arg( self::PAGE_QUERY_VAR, $current_page + 1 );
+			$next_url = ( '' !== $base_url )
+				? add_query_arg( self::PAGE_QUERY_VAR, $current_page + 1, $base_url )
+				: add_query_arg( self::PAGE_QUERY_VAR, $current_page + 1 );
 			$parts[]  = '<a class="whatsnew-next" href="' . esc_url( $next_url ) . '">' . esc_html( self::t( 'pagination_next' ) ) . '</a>';
 		}
 
@@ -1184,12 +1271,14 @@ final class Mngsk_Recent_Content_List {
 	 * スタイル「もっと見るボタン」: 次ページへのリンクを1つだけ出す(最終ページでは空文字、<nav>の中身のみ)。
 	 * render()側で、このスタイルの場合はページ内容自体が累積取得になっている点に注意。
 	 */
-	private static function pagination_inner_load_more( $current_page, $max_pages ) {
+	private static function pagination_inner_load_more( $current_page, $max_pages, $base_url = '' ) {
 		if ( $current_page >= $max_pages ) {
 			return '';
 		}
 
-		$next_url = add_query_arg( self::PAGE_QUERY_VAR, $current_page + 1 );
+		$next_url = ( '' !== $base_url )
+			? add_query_arg( self::PAGE_QUERY_VAR, $current_page + 1, $base_url )
+			: add_query_arg( self::PAGE_QUERY_VAR, $current_page + 1 );
 
 		return '<a class="mngsk-recent-content__load-more" href="' . esc_url( $next_url ) . '">' . esc_html( self::t( 'load_more_text' ) ) . '</a>';
 	}

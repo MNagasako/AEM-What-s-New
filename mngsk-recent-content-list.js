@@ -91,10 +91,18 @@
 		}
 
 		var atts = container.getAttribute( 'data-mngsk-recent-content-atts' ) || '{}';
+		var locale = container.getAttribute( 'data-mngsk-recent-content-locale' ) || '';
+		var currentUrl = container.getAttribute( 'data-mngsk-recent-content-url' ) || window.location.href;
 		var body = new URLSearchParams();
 		body.set( 'action', window.MngskRecentContent.action );
 		body.set( 'atts', atts );
 		body.set( 'page', page );
+		if ( locale ) {
+			body.set( 'locale', locale );
+		}
+		if ( currentUrl ) {
+			body.set( 'current_url', currentUrl );
+		}
 		if ( isLoadMore( container ) ) {
 			body.set( 'incremental_load_more', '1' );
 		}
@@ -152,7 +160,14 @@
 		} else {
 			container.innerHTML = fresh.innerHTML;
 		}
-		[ 'data-mngsk-recent-content-atts', 'data-mngsk-recent-content-page', 'data-mngsk-recent-content-max-pages', 'data-mngsk-recent-content-load-more' ].forEach( function ( attr ) {
+		[
+			'data-mngsk-recent-content-atts',
+			'data-mngsk-recent-content-page',
+			'data-mngsk-recent-content-max-pages',
+			'data-mngsk-recent-content-load-more',
+			'data-mngsk-recent-content-locale',
+			'data-mngsk-recent-content-url'
+		].forEach( function ( attr ) {
 			var value = fresh.getAttribute( attr );
 			if ( value ) {
 				container.setAttribute( attr, value );
