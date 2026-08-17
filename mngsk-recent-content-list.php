@@ -15,6 +15,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+if ( ! class_exists( 'Mngsk_Recent_Content_List' ) ) {
+
 final class Mngsk_Recent_Content_List {
 
 	const VERSION           = '1.6.2';
@@ -1544,3 +1546,5 @@ final class Mngsk_Recent_Content_List {
 }
 
 Mngsk_Recent_Content_List::boot();
+
+}
