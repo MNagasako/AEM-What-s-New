@@ -2,7 +2,7 @@
 Contributors: nagasako
 Tags: shortcode, news, recent-posts, category
 Requires at least: 6.0
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 7.4
 Stable tag: 1.6.4
 License: GPLv2 or later
