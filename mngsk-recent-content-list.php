@@ -1489,6 +1489,275 @@ final class Mngsk_Recent_Content_List {
 	}
 
 	/**
+	 * 表示対象の投稿を取得する。
+	 *
+	 * 旧プラグインはget_posts()(suppress_filters既定true)を使っていたため
+	 * User Access Manager等の閲覧制限フィルタが効いていなかった。ここではWP_Queryを
+	 * 使うので、制限対象の記事は閲覧権限のない利用者には出ない。
+	 *
+	 * @return WP_Query
+	 */
+	private static function query_posts( array $atts, $orderby, $paged, $posts_per_page, $locale = '', $active_filter_term_id = 0 ) {
+		$args = self::build_query_args( $atts, $orderby, $locale, $active_filter_term_id );
+
+		$args['posts_per_page'] = max( 1, (int) $posts_per_page );
+		$args['paged']          = max( 1, (int) $paged );
+		// 件数(found_posts)が必要な場合はcount_matching_posts()で別途取得するため、
+		// ここでのSQL_CALC_FOUND_ROWSは常に無効化しておく。
+		$args['no_found_rows']  = true;
+
+		$args = apply_filters( 'mngsk_recent_content_query_args', $args, $atts );
+
+		return new WP_Query( $args );
+	}
+
+	/**
+	 * ページネーションの総ページ数を出すための、条件に合う投稿の総数だけを数える軽量クエリ。
+	 *
+	 * @return int
+	 */
+	private static function count_matching_posts( array $atts, $orderby, $locale = '', $active_filter_term_id = 0 ) {
+		$args                   = self::build_query_args( $atts, $orderby, $locale, $active_filter_term_id );
+		$args['posts_per_page'] = 1;
+		$args['paged']          = 1;
+		$args['no_found_rows']  = false;
+		$args['fields']         = 'ids';
+
+		$args = apply_filters( 'mngsk_recent_content_query_args', $args, $atts );
+
+		$query = new WP_Query( $args );
+
+		return (int) $query->found_posts;
+	}
+
+	/**
+	 * query_posts()/count_matching_posts()で共有する、投稿タイプ・カテゴリ・除外・期間などの
+	 * 絞り込み条件(posts_per_page/paged/no_found_rows以外)を組み立てる。
+	 */
+	private static function build_query_args( array $atts, $orderby, $locale = '', $active_filter_term_id = 0 ) {
+		$args = array(
+			'post_type'           => self::parse_post_types( $atts['post_type'] ),
+			'post_status'         => 'publish',
+			'orderby'             => $orderby,
+			'order'               => 'DESC',
+			'ignore_sticky_posts' => true,
+			'update_post_meta_cache' => false,
+			// カテゴリ列を表示する場合はget_the_category()がpost毎にDBを叩かないよう事前キャッシュする。
+			'update_post_term_cache' => self::is_truthy( $atts['show_category'] ?? 'no' ),
+		);
+
+		if ( '' !== $locale ) {
+			// Polylang / 標準多言語クエリ引数
+			$args['lang'] = $locale;
+
+			// Bogoプラグインが有効な環境では、カスタムWP_Queryに対して自動で言語絞り込みが
+			// 適用されない(メインクエリ以外はBogoが除外される)ため、初回表示・Ajax問わず、
+			// 投稿メタ(_locale)による絞り込みを明示的に付与する。
+			if ( function_exists( 'bogo_get_locale' ) || defined( 'BOGO_VERSION' ) ) {
+				$meta_query = isset( $args['meta_query'] ) && is_array( $args['meta_query'] ) ? $args['meta_query'] : array();
+				$meta_query[] = array(
+					'key'     => '_locale',
+					'value'   => $locale,
+					'compare' => '=',
+				);
+				$args['meta_query'] = $meta_query; // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+			}
+		}
+
+		$date_query = array();
+		if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', (string) ( $atts['date_from'] ?? '' ) ) ) {
+			$date_query['after'] = $atts['date_from'] . ' 00:00:00';
+		}
+		if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', (string) ( $atts['date_to'] ?? '' ) ) ) {
+			$date_query['before'] = $atts['date_to'] . ' 23:59:59';
+		}
+		if ( ! empty( $date_query ) ) {
+			$date_query['column']    = ( 'modified' === $orderby ) ? 'post_modified' : 'post_date';
+			$date_query['inclusive'] = true;
+			$args['date_query']      = array( $date_query ); // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_date_query
+		}
+
+		$tax_query = array();
+
+		$include = self::resolve_category_ids( $atts['category'] );
+		if ( ! empty( $include ) ) {
+			$tax_query[] = array(
+				'taxonomy'         => 'category',
+				'field'            => 'term_id',
+				'terms'            => $include,
+				'operator'         => 'IN',
+				'include_children' => true,
+			);
+		}
+
+		if ( $active_filter_term_id > 0 ) {
+			$tax_query[] = array(
+				'taxonomy'         => 'category',
+				'field'            => 'term_id',
+				'terms'            => array( (int) $active_filter_term_id ),
+				'operator'         => 'IN',
+				'include_children' => true,
+			);
+		}
+
+		$exclude = self::resolve_category_ids( $atts['exclude_category'] );
+		if ( ! empty( $exclude ) ) {
+			$tax_query[] = array(
+				'taxonomy'         => 'category',
+				'field'            => 'term_id',
+				'terms'            => $exclude,
+				'operator'         => 'NOT IN',
+				'include_children' => true,
+			);
+		}
+
+		if ( count( $tax_query ) > 1 ) {
+			$tax_query['relation'] = 'AND';
+		}
+		if ( ! empty( $tax_query ) ) {
+			$args['tax_query'] = $tax_query; // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query
+		}
+
+		$exclude_ids = self::parse_ids( $atts['exclude_ids'] );
+		if ( ! empty( $exclude_ids ) ) {
+			// ユーザー指定の除外機能に必要。parse_ids()は重複を除去し最大50件に制限する。
+			$args['post__not_in'] = $exclude_ids; // phpcs:ignore WordPressVIPMinimum.Performance.WPQueryParams.PostNotIn_post__not_in
+		}
+
+		return $args;
+	}
+
+	/**
+	 * ページネーション用の現在ページ番号。1未満は1に丸める。
+	 *
+	 * @param string $instance
+	 * @return int
+	 */
+	private static function current_page( $instance = '' ) {
+		$var  = self::page_query_var( $instance );
+		$page = isset( $_GET[ $var ] ) ? absint( wp_unslash( $_GET[ $var ] ) ) : 1; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- ページ送りの読み取りのみで状態変更を伴わない
+
+		return max( 1, $page );
+	}
+
+	/**
+	 * カテゴリフィルタ用の現在リクエスト値を取得する。
+	 *
+	 * @param string $instance
+	 * @return string|null
+	 */
+	private static function current_category( $instance = '' ) {
+		$var = self::category_query_var( $instance );
+		if ( isset( $_GET[ $var ] ) && is_string( $_GET[ $var ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- フィルタの読み取りのみで状態変更を伴わない
+			return sanitize_text_field( wp_unslash( $_GET[ $var ] ) );
+		}
+
+		return null;
+	}
+
+	/**
+	 * ページネーションのリンク一覧をHTMLで返す(1ページしかない場合は空文字)。
+	 */
+	private static function render_pagination( $current_page, $max_pages, $style = 'numbers', $position = 'bottom_left', $base_url = '', $instance = '', $active_category_slug = 'all' ) {
+		$max_pages = (int) $max_pages;
+		if ( $max_pages <= 1 ) {
+			return '';
+		}
+
+		if ( 'load_more' === $style ) {
+			$inner       = self::pagination_inner_load_more( $current_page, $max_pages, $base_url, $instance, $active_category_slug );
+			$style_class = 'mngsk-recent-content__pagination--load-more';
+		} elseif ( 'prev_next' === $style ) {
+			$inner       = self::pagination_inner_prev_next( $current_page, $max_pages, $base_url, $instance, $active_category_slug );
+			$style_class = 'mngsk-recent-content__pagination--prev-next';
+		} else {
+			$inner       = self::pagination_inner_numbers( $current_page, $max_pages, $base_url, $instance, $active_category_slug );
+			$style_class = 'mngsk-recent-content__pagination--numbers';
+		}
+
+		if ( '' === $inner ) {
+			return '';
+		}
+
+		$position_class = 'mngsk-recent-content__pagination--pos-' . str_replace( '_', '-', $position );
+
+		return '<nav class="mngsk-recent-content__pagination ' . $style_class . ' ' . $position_class . '" aria-label="Pagination">' . $inner . '</nav>';
+	}
+
+	/**
+	 * ページネーションリンク用のURLベースを組み立てる(active categoryを維持)。
+	 */
+	private static function pagination_base_url( $base_url, $instance, $active_category_slug ) {
+		$url      = ( '' !== $base_url ) ? $base_url : self::current_request_url();
+		$cat_var  = self::category_query_var( $instance );
+
+		if ( 'all' !== $active_category_slug && '' !== $active_category_slug ) {
+			$url = add_query_arg( $cat_var, $active_category_slug, $url );
+		} else {
+			$url = remove_query_arg( $cat_var, $url );
+		}
+
+		return $url;
+	}
+
+	/**
+	 * スタイル「番号付き」: paginate_links()による通常のページ番号一覧(<nav>の中身のみ)。
+	 */
+	private static function pagination_inner_numbers( $current_page, $max_pages, $base_url = '', $instance = '', $active_category_slug = 'all' ) {
+		$target_url = self::pagination_base_url( $base_url, $instance, $active_category_slug );
+		$page_var   = self::page_query_var( $instance );
+		$base       = add_query_arg( $page_var, '%#%', $target_url );
+
+		return (string) paginate_links(
+			array(
+				'base'      => $base,
+				'format'    => '',
+				'current'   => $current_page,
+				'total'     => $max_pages,
+				'type'      => 'plain',
+				'prev_text' => '‹',
+				'next_text' => '›',
+			)
+		);
+	}
+
+	/**
+	 * スタイル「前へ/次へのみ」: 番号を出さず、前後のリンクだけを出す(<nav>の中身のみ)。
+	 */
+	private static function pagination_inner_prev_next( $current_page, $max_pages, $base_url = '', $instance = '', $active_category_slug = 'all' ) {
+		$target_url = self::pagination_base_url( $base_url, $instance, $active_category_slug );
+		$page_var   = self::page_query_var( $instance );
+		$parts      = array();
+
+		if ( $current_page > 1 ) {
+			$prev_url = add_query_arg( $page_var, $current_page - 1, $target_url );
+			$parts[]  = '<a class="whatsnew-prev" href="' . esc_url( $prev_url ) . '">' . esc_html( self::t( 'pagination_prev' ) ) . '</a>';
+		}
+		if ( $current_page < $max_pages ) {
+			$next_url = add_query_arg( $page_var, $current_page + 1, $target_url );
+			$parts[]  = '<a class="whatsnew-next" href="' . esc_url( $next_url ) . '">' . esc_html( self::t( 'pagination_next' ) ) . '</a>';
+		}
+
+		return implode( ' ', $parts );
+	}
+
+	/**
+	 * スタイル「もっと見るボタン」: 次ページへのリンクを1つだけ出す(最終ページでは空文字、<nav>の中身のみ)。
+	 * render()側で、このスタイルの場合はページ内容自体が累積取得になっている点に注意。
+	 */
+	private static function pagination_inner_load_more( $current_page, $max_pages, $base_url = '', $instance = '', $active_category_slug = 'all' ) {
+		if ( $current_page >= $max_pages ) {
+			return '';
+		}
+
+		$target_url = self::pagination_base_url( $base_url, $instance, $active_category_slug );
+		$page_var   = self::page_query_var( $instance );
+		$next_url   = add_query_arg( $page_var, $current_page + 1, $target_url );
+
+		return '<a class="mngsk-recent-content__load-more" href="' . esc_url( $next_url ) . '">' . esc_html( self::t( 'load_more_text' ) ) . '</a>';
+	}
+
+	/**
 	 * カテゴリ指定(カンマ区切り)をterm_idの配列に解決する。
 	 *
 	 * スラッグ / 日本語のカテゴリ名 / 数値ID のいずれでも指定できる。
