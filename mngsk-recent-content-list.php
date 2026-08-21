@@ -624,6 +624,15 @@ final class Mngsk_Recent_Content_List {
 				'default'           => self::hard_defaults(),
 			)
 		);
+		register_setting(
+			self::SETTINGS_GROUP,
+			self::CATEGORY_UI_OPTION,
+			array(
+				'type'              => 'array',
+				'sanitize_callback' => array( __CLASS__, 'sanitize_category_ui_options' ),
+				'default'           => array(),
+			)
+		);
 	}
 
 	/**
@@ -670,29 +679,37 @@ final class Mngsk_Recent_Content_List {
 	 */
 	public static function ajax_paginate() {
 		$atts = self::ajax_atts_from_request();
-		$page = isset( $_POST['page'] ) ? absint( $_POST['page'] ) : 1; // phpcs:ignore WordPress.Security.NonceVerification.Missing
-		$incremental_load_more = isset( $_POST['incremental_load_more'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['incremental_load_more'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 公開データの読み取り専用Ajaxエンドポイント
+		$raw_page = isset( $_POST['page'] ) ? $_POST['page'] : null;
+		$page     = is_scalar( $raw_page ) ? absint( $raw_page ) : 1;
 
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
+		$raw_incremental       = isset( $_POST['incremental_load_more'] ) ? $_POST['incremental_load_more'] : null;
+		$incremental_load_more = ( is_string( $raw_incremental ) && '1' === sanitize_text_field( wp_unslash( $raw_incremental ) ) );
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
+		$raw_category       = isset( $_POST['category'] ) ? $_POST['category'] : null;
 		$requested_category = null;
-		if ( isset( $_POST['category'] ) && is_string( $_POST['category'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
-			$requested_category = sanitize_text_field( wp_unslash( $_POST['category'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
-			if ( strlen( $requested_category ) > self::MAX_AJAX_ATTRIBUTE_BYTES ) {
-				$requested_category = null;
+		if ( is_string( $raw_category ) ) {
+			$clean_cat = sanitize_text_field( wp_unslash( $raw_category ) );
+			if ( strlen( $clean_cat ) <= self::MAX_AJAX_ATTRIBUTE_BYTES ) {
+				$requested_category = $clean_cat;
 			}
 		}
 
-		$locale = '';
-		if ( isset( $_POST['locale'] ) && is_string( $_POST['locale'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
-			$raw_locale = sanitize_text_field( wp_unslash( $_POST['locale'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
-			if ( preg_match( '/^[a-zA-Z0-9_-]{2,30}$/', $raw_locale ) ) {
-				$locale = $raw_locale;
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
+		$raw_locale = isset( $_POST['locale'] ) ? $_POST['locale'] : null;
+		$locale     = '';
+		if ( is_string( $raw_locale ) ) {
+			$clean_locale = sanitize_text_field( wp_unslash( $raw_locale ) );
+			if ( preg_match( '/^[a-zA-Z0-9_-]{2,30}$/', $clean_locale ) ) {
+				$locale = $clean_locale;
 			}
 		}
 
-		$current_url = '';
-		if ( isset( $_POST['current_url'] ) && is_string( $_POST['current_url'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
-			$current_url = esc_url_raw( wp_unslash( $_POST['current_url'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
-		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
+		$raw_url     = isset( $_POST['current_url'] ) ? $_POST['current_url'] : null;
+		$current_url = is_string( $raw_url ) ? esc_url_raw( wp_unslash( $raw_url ) ) : '';
 
 		$switched = false;
 		if ( '' !== $locale && function_exists( 'switch_to_locale' ) ) {
@@ -716,11 +733,13 @@ final class Mngsk_Recent_Content_List {
 	 * @return array<string, string>
 	 */
 	private static function ajax_atts_from_request() {
-		if ( ! isset( $_POST['atts'] ) || ! is_string( $_POST['atts'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
+		$raw_atts = isset( $_POST['atts'] ) ? $_POST['atts'] : null;
+		if ( ! is_string( $raw_atts ) ) {
 			wp_send_json_error( array( 'message' => 'Invalid attributes.' ), 400 );
 		}
 
-		$raw = sanitize_textarea_field( wp_unslash( $_POST['atts'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
+		$raw = sanitize_textarea_field( wp_unslash( $raw_atts ) );
 		if ( strlen( $raw ) > self::MAX_AJAX_ATTS_BYTES ) {
 			wp_send_json_error( array( 'message' => 'Attributes are too large.' ), 400 );
 		}
@@ -859,12 +878,6 @@ final class Mngsk_Recent_Content_List {
 			$out['category_filter'] = implode( ',', array_slice( array_filter( $filter_slugs ), 0, self::MAX_LIST_VALUES ) );
 		} else {
 			$out['category_filter'] = isset( $input['category_filter'] ) ? sanitize_text_field( $input['category_filter'] ) : '';
-		}
-
-		// category_uiの保存
-		if ( isset( $_POST[ self::CATEGORY_UI_OPTION ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
-			$clean_ui = self::sanitize_category_ui_options( wp_unslash( $_POST[ self::CATEGORY_UI_OPTION ] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
-			update_option( self::CATEGORY_UI_OPTION, $clean_ui );
 		}
 
 		$out['category_filter_default'] = isset( $input['category_filter_default'] ) ? sanitize_text_field( $input['category_filter_default'] ) : 'all';
@@ -1826,10 +1839,15 @@ final class Mngsk_Recent_Content_List {
 	 * @return int
 	 */
 	private static function current_page( $instance = '' ) {
-		$var  = self::page_query_var( $instance );
-		$page = isset( $_GET[ $var ] ) ? absint( wp_unslash( $_GET[ $var ] ) ) : 1; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- ページ送りの読み取りのみで状態変更を伴わない
+		$var = self::page_query_var( $instance );
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- 状態変更を伴わない公開ページ送り表示の読み取り
+		$raw = isset( $_GET[ $var ] ) ? $_GET[ $var ] : null;
+		if ( is_scalar( $raw ) ) {
+			$page = absint( wp_unslash( $raw ) );
+			return max( 1, $page );
+		}
 
-		return max( 1, $page );
+		return 1;
 	}
 
 	/**
@@ -1840,8 +1858,10 @@ final class Mngsk_Recent_Content_List {
 	 */
 	private static function current_category( $instance = '' ) {
 		$var = self::category_query_var( $instance );
-		if ( isset( $_GET[ $var ] ) && is_string( $_GET[ $var ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- フィルタの読み取りのみで状態変更を伴わない
-			return sanitize_text_field( wp_unslash( $_GET[ $var ] ) );
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- 状態変更を伴わない公開カテゴリフィルタ表示の読み取り
+		$raw = isset( $_GET[ $var ] ) ? $_GET[ $var ] : null;
+		if ( is_string( $raw ) ) {
+			return sanitize_text_field( wp_unslash( $raw ) );
 		}
 
 		return null;
