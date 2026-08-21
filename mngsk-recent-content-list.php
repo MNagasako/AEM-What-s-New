@@ -258,6 +258,10 @@ final class Mngsk_Recent_Content_List {
 				'th_label_ja'            => '日本語ラベル',
 				'th_label_en'            => 'English label',
 				'th_category_order'      => '表示順',
+				'aria_category_use'      => '%s をフィルタ候補に使用',
+				'aria_label_ja'          => '%s の日本語表示ラベル',
+				'aria_label_en'          => '%s のEnglish表示ラベル',
+				'aria_category_order'    => '%s の表示順',
 				'filter_all_text'        => 'すべて',
 				'filter_select_label'    => 'カテゴリで絞り込み',
 				'filter_select_submit'   => '絞り込む',
@@ -354,6 +358,10 @@ final class Mngsk_Recent_Content_List {
 				'th_label_ja'            => 'Japanese label',
 				'th_label_en'            => 'English label',
 				'th_category_order'      => 'Order',
+				'aria_category_use'      => 'Use %s for category filter',
+				'aria_label_ja'          => 'Japanese label for %s',
+				'aria_label_en'          => 'English label for %s',
+				'aria_category_order'    => 'Display order for %s',
 				'filter_all_text'        => 'All',
 				'filter_select_label'    => 'Filter by category',
 				'filter_select_submit'   => 'Filter',
@@ -680,22 +688,46 @@ final class Mngsk_Recent_Content_List {
 	public static function ajax_paginate() {
 		$atts = self::ajax_atts_from_request();
 
+		$page = 1;
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 公開データの読み取り専用Ajaxエンドポイント
-		$page = isset( $_POST['page'] ) ? absint( wp_unslash( $_POST['page'] ) ) : 1;
+		if ( isset( $_POST['page'] ) && ( is_numeric( $_POST['page'] ) || is_string( $_POST['page'] ) ) ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 公開データの読み取り専用Ajaxエンドポイント
+			$page = max( 1, absint( wp_unslash( $_POST['page'] ) ) );
+		}
 
+		$incremental_load_more = false;
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
-		$incremental_load_more = isset( $_POST['incremental_load_more'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['incremental_load_more'] ) );
+		if ( isset( $_POST['incremental_load_more'] ) && is_string( $_POST['incremental_load_more'] ) ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
+			$incremental_load_more = ( '1' === sanitize_text_field( wp_unslash( $_POST['incremental_load_more'] ) ) );
+		}
 
+		$requested_category = null;
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
-		$raw_category = isset( $_POST['category'] ) ? sanitize_text_field( wp_unslash( $_POST['category'] ) ) : '';
-		$requested_category = ( '' !== $raw_category && strlen( $raw_category ) <= self::MAX_AJAX_ATTRIBUTE_BYTES ) ? $raw_category : null;
+		if ( isset( $_POST['category'] ) && is_string( $_POST['category'] ) ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
+			$clean_cat = sanitize_text_field( wp_unslash( $_POST['category'] ) );
+			if ( '' !== $clean_cat && strlen( $clean_cat ) <= self::MAX_AJAX_ATTRIBUTE_BYTES ) {
+				$requested_category = $clean_cat;
+			}
+		}
 
+		$locale = '';
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
-		$raw_locale = isset( $_POST['locale'] ) ? sanitize_text_field( wp_unslash( $_POST['locale'] ) ) : '';
-		$locale     = ( '' !== $raw_locale && preg_match( '/^[a-zA-Z0-9_-]{2,30}$/', $raw_locale ) ) ? $raw_locale : '';
+		if ( isset( $_POST['locale'] ) && is_string( $_POST['locale'] ) ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
+			$clean_locale = sanitize_text_field( wp_unslash( $_POST['locale'] ) );
+			if ( preg_match( '/^[a-zA-Z0-9_-]{2,30}$/', $clean_locale ) ) {
+				$locale = $clean_locale;
+			}
+		}
 
+		$current_url = '';
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
-		$current_url = isset( $_POST['current_url'] ) ? esc_url_raw( wp_unslash( $_POST['current_url'] ) ) : '';
+		if ( isset( $_POST['current_url'] ) && is_string( $_POST['current_url'] ) ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
+			$current_url = esc_url_raw( wp_unslash( $_POST['current_url'] ) );
+		}
 
 		$switched = false;
 		if ( '' !== $locale && function_exists( 'switch_to_locale' ) ) {
@@ -720,7 +752,12 @@ final class Mngsk_Recent_Content_List {
 	 */
 	private static function ajax_atts_from_request() {
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
-		$raw = isset( $_POST['atts'] ) ? sanitize_textarea_field( wp_unslash( $_POST['atts'] ) ) : '';
+		if ( ! isset( $_POST['atts'] ) || ! is_string( $_POST['atts'] ) ) {
+			wp_send_json_error( array( 'message' => 'Invalid attributes.' ), 400 );
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
+		$raw = sanitize_textarea_field( wp_unslash( $_POST['atts'] ) );
 		if ( '' === $raw ) {
 			wp_send_json_error( array( 'message' => 'Invalid attributes.' ), 400 );
 		}
@@ -997,7 +1034,7 @@ final class Mngsk_Recent_Content_List {
 					);
 
 					echo '<div class="mngsk-recent-content-admin-categories">';
-					echo '<table class="widefat striped mngsk-recent-content-admin-category-table" role="presentation">';
+					echo '<table class="widefat striped mngsk-recent-content-admin-category-table">';
 					echo '<thead><tr>';
 					echo '<th scope="col" class="mngsk-recent-content-admin-col-use">' . esc_html( self::t( 'th_category_use' ) ) . '</th>';
 					echo '<th scope="col" class="mngsk-recent-content-admin-col-name">' . esc_html( self::t( 'th_category_name' ) ) . '</th>';
@@ -1017,20 +1054,20 @@ final class Mngsk_Recent_Content_List {
 						printf(
 							'<tr>
 								<td class="mngsk-recent-content-admin-col-use">
-									<input type="checkbox" name="%1$s[]" value="%2$s"%3$s />
+									<input type="checkbox" name="%1$s[]" value="%2$s"%3$s aria-label="%10$s" />
 								</td>
 								<td class="mngsk-recent-content-admin-col-name">
 									<strong class="mngsk-recent-content-admin-category-title">%4$s</strong>
 									<code class="mngsk-recent-content-admin-category-slug">%2$s</code>
 								</td>
 								<td class="mngsk-recent-content-admin-col-label-ja">
-									<input type="text" name="%5$s[%6$d][label_ja]" value="%7$s" placeholder="%4$s" class="mngsk-recent-content-admin-input-text" maxlength="100" />
+									<input type="text" name="%5$s[%6$d][label_ja]" value="%7$s" placeholder="%4$s" class="mngsk-recent-content-admin-input-text" maxlength="100" aria-label="%11$s" />
 								</td>
 								<td class="mngsk-recent-content-admin-col-label-en">
-									<input type="text" name="%5$s[%6$d][label_en]" value="%8$s" placeholder="%4$s" class="mngsk-recent-content-admin-input-text" maxlength="100" />
+									<input type="text" name="%5$s[%6$d][label_en]" value="%8$s" placeholder="%4$s" class="mngsk-recent-content-admin-input-text" maxlength="100" aria-label="%12$s" />
 								</td>
 								<td class="mngsk-recent-content-admin-col-order">
-									<input type="number" name="%5$s[%6$d][order]" value="%9$d" min="0" max="99999" class="mngsk-recent-content-admin-input-order" />
+									<input type="number" name="%5$s[%6$d][order]" value="%9$d" min="0" max="99999" class="mngsk-recent-content-admin-input-order" aria-label="%13$s" />
 								</td>
 							</tr>',
 							esc_attr( $name ),
@@ -1041,7 +1078,11 @@ final class Mngsk_Recent_Content_List {
 							(int) $cat->term_id,
 							esc_attr( $label_ja ),
 							esc_attr( $label_en ),
-							(int) $cat_order
+							(int) $cat_order,
+							esc_attr( sprintf( self::t( 'aria_category_use' ), $cat->name ) ),
+							esc_attr( sprintf( self::t( 'aria_label_ja' ), $cat->name ) ),
+							esc_attr( sprintf( self::t( 'aria_label_en' ), $cat->name ) ),
+							esc_attr( sprintf( self::t( 'aria_category_order' ), $cat->name ) )
 						);
 					}
 					echo '</tbody></table>';
@@ -1826,9 +1867,12 @@ final class Mngsk_Recent_Content_List {
 	private static function current_page( $instance = '' ) {
 		$var = self::page_query_var( $instance );
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- 状態変更を伴わない公開ページ送り表示の読み取り
-		$page = isset( $_GET[ $var ] ) ? absint( wp_unslash( $_GET[ $var ] ) ) : 1;
+		if ( isset( $_GET[ $var ] ) && ( is_numeric( $_GET[ $var ] ) || is_string( $_GET[ $var ] ) ) ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- 状態変更を伴わない公開ページ送り表示の読み取り
+			return max( 1, absint( wp_unslash( $_GET[ $var ] ) ) );
+		}
 
-		return max( 1, $page );
+		return 1;
 	}
 
 	/**
@@ -1840,9 +1884,13 @@ final class Mngsk_Recent_Content_List {
 	private static function current_category( $instance = '' ) {
 		$var = self::category_query_var( $instance );
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- 状態変更を伴わない公開カテゴリフィルタ表示の読み取り
-		$cat = isset( $_GET[ $var ] ) ? sanitize_text_field( wp_unslash( $_GET[ $var ] ) ) : '';
+		if ( isset( $_GET[ $var ] ) && is_string( $_GET[ $var ] ) ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- 状態変更を伴わない公開カテゴリフィルタ表示の読み取り
+			$cat = sanitize_text_field( wp_unslash( $_GET[ $var ] ) );
+			return '' !== $cat ? $cat : null;
+		}
 
-		return '' !== $cat ? $cat : null;
+		return null;
 	}
 
 	/**
