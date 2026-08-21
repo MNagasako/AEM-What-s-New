@@ -14,11 +14,14 @@ WordPressの投稿・固定ページから新着一覧を表示する軽量プ�
 
 ```text
 [mngsk_recent_content number="5" category="announcements"]
+[mngsk_recent_content category_filter="news,event,equipment"]
+[mngsk_recent_content category="info" category_filter="news,event" category_filter_style="select"]
 [mngsk_recent_content post_type="post,page" orderby="modified"]
 [mngsk_recent_content pagination="yes" pagination_style="load_more"]
+[mngsk_recent_content instance="news" category_filter="news,event"]
 ```
 
-主な属性は `title`、`post_type`、`category`、`exclude_category`、`number`、`orderby`、`layout`、`date_format`、`pagination` です。ページネーションのURLパラメータには `mngsk_recent_content_page` を使用します。
+主な属性は `title`、`post_type`、`category`、`category_filter`、`category_filter_default`、`category_filter_style`、`category_filter_all`、`instance`、`exclude_category`、`number`、`orderby`、`layout`、`date_format`、`pagination` です。ページネーションのURLパラメータには `mngsk_recent_content_page`（インスタンス指定時は `mngsk_recent_content_{instance}_page`）、カテゴリフィルタのURLパラメータには `mngsk_recent_content_category`（インスタンス指定時は `mngsk_recent_content_{instance}_category`）を使用します。
 
 ## CSSによるカスタマイズ
 
@@ -28,6 +31,10 @@ WordPressの投稿・固定ページから新着一覧を表示する軽量プ�
 | --- | --- |
 | `.mngsk-recent-content` | 一覧全体 |
 | `.mngsk-recent-content__title` | 見出し |
+| `.mngsk-recent-content__filters` | フィルタナビゲーション / フォーム |
+| `.mngsk-recent-content__filter` | 各カテゴリ切替ボタン |
+| `.mngsk-recent-content__filter--active` | 選択中のカテゴリボタン |
+| `.mngsk-recent-content__filter-select` | フィルタセレクトボックス |
 | `.mngsk-recent-content__item` | 各記事リンク |
 | `.mngsk-recent-content__date` | 日付 |
 | `.mngsk-recent-content__type` / `__category` | タイプ・カテゴリ |
@@ -37,6 +44,10 @@ WordPressの投稿・固定ページから新着一覧を表示する軽量プ�
 ```css
 .mngsk-recent-content__newmark {
   background-color: #005a9c;
+}
+.mngsk-recent-content__filter--active {
+  background-color: #005a9c;
+  color: #fff;
 }
 ```
 
