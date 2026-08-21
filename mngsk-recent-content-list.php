@@ -683,35 +683,19 @@ final class Mngsk_Recent_Content_List {
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 公開データの読み取り専用Ajaxエンドポイント
 		$page = isset( $_POST['page'] ) ? absint( wp_unslash( $_POST['page'] ) ) : 1;
 
-		$incremental_load_more = false;
-		if ( isset( $_POST['incremental_load_more'] ) && is_string( $_POST['incremental_load_more'] ) ) {
-			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
-			$incremental_load_more = ( '1' === sanitize_text_field( wp_unslash( $_POST['incremental_load_more'] ) ) );
-		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
+		$incremental_load_more = isset( $_POST['incremental_load_more'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['incremental_load_more'] ) );
 
-		$requested_category = null;
-		if ( isset( $_POST['category'] ) && is_string( $_POST['category'] ) ) {
-			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
-			$clean_cat = sanitize_text_field( wp_unslash( $_POST['category'] ) );
-			if ( strlen( $clean_cat ) <= self::MAX_AJAX_ATTRIBUTE_BYTES ) {
-				$requested_category = $clean_cat;
-			}
-		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
+		$raw_category = isset( $_POST['category'] ) ? sanitize_text_field( wp_unslash( $_POST['category'] ) ) : '';
+		$requested_category = ( '' !== $raw_category && strlen( $raw_category ) <= self::MAX_AJAX_ATTRIBUTE_BYTES ) ? $raw_category : null;
 
-		$locale = '';
-		if ( isset( $_POST['locale'] ) && is_string( $_POST['locale'] ) ) {
-			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
-			$clean_locale = sanitize_text_field( wp_unslash( $_POST['locale'] ) );
-			if ( preg_match( '/^[a-zA-Z0-9_-]{2,30}$/', $clean_locale ) ) {
-				$locale = $clean_locale;
-			}
-		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
+		$raw_locale = isset( $_POST['locale'] ) ? sanitize_text_field( wp_unslash( $_POST['locale'] ) ) : '';
+		$locale     = ( '' !== $raw_locale && preg_match( '/^[a-zA-Z0-9_-]{2,30}$/', $raw_locale ) ) ? $raw_locale : '';
 
-		$current_url = '';
-		if ( isset( $_POST['current_url'] ) && is_string( $_POST['current_url'] ) ) {
-			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
-			$current_url = esc_url_raw( wp_unslash( $_POST['current_url'] ) );
-		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
+		$current_url = isset( $_POST['current_url'] ) ? esc_url_raw( wp_unslash( $_POST['current_url'] ) ) : '';
 
 		$switched = false;
 		if ( '' !== $locale && function_exists( 'switch_to_locale' ) ) {
@@ -735,12 +719,11 @@ final class Mngsk_Recent_Content_List {
 	 * @return array<string, string>
 	 */
 	private static function ajax_atts_from_request() {
-		if ( ! isset( $_POST['atts'] ) || ! is_string( $_POST['atts'] ) ) {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
+		$raw = isset( $_POST['atts'] ) ? sanitize_textarea_field( wp_unslash( $_POST['atts'] ) ) : '';
+		if ( '' === $raw ) {
 			wp_send_json_error( array( 'message' => 'Invalid attributes.' ), 400 );
 		}
-
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
-		$raw = sanitize_textarea_field( wp_unslash( $_POST['atts'] ) );
 		if ( strlen( $raw ) > self::MAX_AJAX_ATTS_BYTES ) {
 			wp_send_json_error( array( 'message' => 'Attributes are too large.' ), 400 );
 		}
@@ -1841,12 +1824,10 @@ final class Mngsk_Recent_Content_List {
 	 */
 	private static function current_page( $instance = '' ) {
 		$var = self::page_query_var( $instance );
-		if ( isset( $_GET[ $var ] ) ) {
-			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- 状態変更を伴わない公開ページ送り表示の読み取り
-			return max( 1, absint( wp_unslash( $_GET[ $var ] ) ) );
-		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- 状態変更を伴わない公開ページ送り表示の読み取り
+		$page = isset( $_GET[ $var ] ) ? absint( wp_unslash( $_GET[ $var ] ) ) : 1;
 
-		return 1;
+		return max( 1, $page );
 	}
 
 	/**
@@ -1857,12 +1838,10 @@ final class Mngsk_Recent_Content_List {
 	 */
 	private static function current_category( $instance = '' ) {
 		$var = self::category_query_var( $instance );
-		if ( isset( $_GET[ $var ] ) && is_string( $_GET[ $var ] ) ) {
-			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- 状態変更を伴わない公開カテゴリフィルタ表示の読み取り
-			return sanitize_text_field( wp_unslash( $_GET[ $var ] ) );
-		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- 状態変更を伴わない公開カテゴリフィルタ表示の読み取り
+		$cat = isset( $_GET[ $var ] ) ? sanitize_text_field( wp_unslash( $_GET[ $var ] ) ) : '';
 
-		return null;
+		return '' !== $cat ? $cat : null;
 	}
 
 	/**
