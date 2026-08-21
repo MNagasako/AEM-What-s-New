@@ -996,14 +996,14 @@ final class Mngsk_Recent_Content_List {
 						}
 					);
 
-					echo '<div style="max-height:280px;overflow-y:auto;border:1px solid #ccd0d4;background:#fff;max-width:680px;">';
-					echo '<table class="widefat striped" style="border:none;margin:0;">';
+					echo '<div class="mngsk-recent-content-admin-categories">';
+					echo '<table class="widefat striped mngsk-recent-content-admin-category-table" role="presentation">';
 					echo '<thead><tr>';
-					echo '<th style="width:40px;text-align:center;padding:6px 8px;">' . esc_html( self::t( 'th_category_use' ) ) . '</th>';
-					echo '<th style="padding:6px 8px;">' . esc_html( self::t( 'th_category_name' ) ) . '</th>';
-					echo '<th style="padding:6px 8px;width:150px;">' . esc_html( self::t( 'th_label_ja' ) ) . '</th>';
-					echo '<th style="padding:6px 8px;width:150px;">' . esc_html( self::t( 'th_label_en' ) ) . '</th>';
-					echo '<th style="padding:6px 8px;width:65px;">' . esc_html( self::t( 'th_category_order' ) ) . '</th>';
+					echo '<th scope="col" class="mngsk-recent-content-admin-col-use">' . esc_html( self::t( 'th_category_use' ) ) . '</th>';
+					echo '<th scope="col" class="mngsk-recent-content-admin-col-name">' . esc_html( self::t( 'th_category_name' ) ) . '</th>';
+					echo '<th scope="col" class="mngsk-recent-content-admin-col-label-ja">' . esc_html( self::t( 'th_label_ja' ) ) . '</th>';
+					echo '<th scope="col" class="mngsk-recent-content-admin-col-label-en">' . esc_html( self::t( 'th_label_en' ) ) . '</th>';
+					echo '<th scope="col" class="mngsk-recent-content-admin-col-order">' . esc_html( self::t( 'th_category_order' ) ) . '</th>';
 					echo '</tr></thead>';
 					echo '<tbody>';
 					$default_order = 10;
@@ -1016,20 +1016,21 @@ final class Mngsk_Recent_Content_List {
 
 						printf(
 							'<tr>
-								<td style="text-align:center;vertical-align:middle;padding:6px 8px;">
+								<td class="mngsk-recent-content-admin-col-use">
 									<input type="checkbox" name="%1$s[]" value="%2$s"%3$s />
 								</td>
-								<td style="vertical-align:middle;padding:6px 8px;">
-									<strong>%4$s</strong><br /><code style="font-size:85%%;">%2$s</code>
+								<td class="mngsk-recent-content-admin-col-name">
+									<strong class="mngsk-recent-content-admin-category-title">%4$s</strong>
+									<code class="mngsk-recent-content-admin-category-slug">%2$s</code>
 								</td>
-								<td style="vertical-align:middle;padding:6px 8px;">
-									<input type="text" name="%5$s[%6$d][label_ja]" value="%7$s" placeholder="%4$s" style="width:100%%;" maxlength="100" />
+								<td class="mngsk-recent-content-admin-col-label-ja">
+									<input type="text" name="%5$s[%6$d][label_ja]" value="%7$s" placeholder="%4$s" class="mngsk-recent-content-admin-input-text" maxlength="100" />
 								</td>
-								<td style="vertical-align:middle;padding:6px 8px;">
-									<input type="text" name="%5$s[%6$d][label_en]" value="%8$s" placeholder="%4$s" style="width:100%%;" maxlength="100" />
+								<td class="mngsk-recent-content-admin-col-label-en">
+									<input type="text" name="%5$s[%6$d][label_en]" value="%8$s" placeholder="%4$s" class="mngsk-recent-content-admin-input-text" maxlength="100" />
 								</td>
-								<td style="vertical-align:middle;padding:6px 8px;">
-									<input type="number" name="%5$s[%6$d][order]" value="%9$d" min="0" max="99999" style="width:60px;" />
+								<td class="mngsk-recent-content-admin-col-order">
+									<input type="number" name="%5$s[%6$d][order]" value="%9$d" min="0" max="99999" class="mngsk-recent-content-admin-input-order" />
 								</td>
 							</tr>',
 							esc_attr( $name ),
