@@ -138,33 +138,91 @@ div.mngsk-recent-content dd {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4em;
-  margin: 0.5em 0 0.5em 0.3em;
+  margin: 0.4em 0 0.6em 0;
 }
 
-.mngsk-recent-content__filter {
+/* 1. links スタイル (既定) — 控えめなテキストリンク + CSS疑似要素区切り */
+.mngsk-recent-content__filters--links {
+  gap: 0;
+}
+.mngsk-recent-content__filters--links .mngsk-recent-content__filter {
+  display: inline-block;
+  padding: 0.15em 0.35em;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.mngsk-recent-content__filters--links .mngsk-recent-content__filter:hover {
+  text-decoration: underline;
+}
+.mngsk-recent-content__filters--links .mngsk-recent-content__filter:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+.mngsk-recent-content__filters--links .mngsk-recent-content__filter--active {
+  font-weight: bold;
+  text-decoration: underline;
+}
+.mngsk-recent-content__filters--links .mngsk-recent-content__filter + .mngsk-recent-content__filter::before {
+  content: "|";
+  margin: 0 0.4em 0 0.1em;
+  opacity: 0.45;
+  text-decoration: none;
+  font-weight: normal;
+  display: inline-block;
+}
+
+/* 2. underline スタイル — 軽量下線タブ */
+.mngsk-recent-content__filters--underline {
+  gap: 0.6em;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 0.25em;
+}
+.mngsk-recent-content__filters--underline .mngsk-recent-content__filter {
+  display: inline-block;
+  padding: 0.2em 0.4em;
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -0.25em;
+  cursor: pointer;
+}
+.mngsk-recent-content__filters--underline .mngsk-recent-content__filter:hover {
+  border-bottom-color: #bbb;
+}
+.mngsk-recent-content__filters--underline .mngsk-recent-content__filter:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+.mngsk-recent-content__filters--underline .mngsk-recent-content__filter--active {
+  font-weight: bold;
+  border-bottom-color: currentColor;
+}
+
+/* 3. pills スタイル (旧buttons) — 角丸ボタン */
+.mngsk-recent-content__filters--pills {
+  gap: 0.4em;
+}
+.mngsk-recent-content__filters--pills .mngsk-recent-content__filter {
   display: inline-block;
   padding: 0.25em 0.7em;
   font-size: 90%;
   border: 1px solid #ccc;
-  border-radius: 3px;
+  border-radius: 12px;
   background-color: #f5f5f5;
   color: inherit;
   text-decoration: none;
   cursor: pointer;
 }
-
-.mngsk-recent-content__filter:hover {
+.mngsk-recent-content__filters--pills .mngsk-recent-content__filter:hover {
   background-color: #e8e8e8;
   text-decoration: none;
 }
-
-.mngsk-recent-content__filter:focus-visible {
+.mngsk-recent-content__filters--pills .mngsk-recent-content__filter:focus-visible {
   outline: 2px solid #005a9c;
   outline-offset: 1px;
 }
-
-.mngsk-recent-content__filter--active {
+.mngsk-recent-content__filters--pills .mngsk-recent-content__filter--active {
   font-weight: bold;
   background-color: #ddd;
   border-color: #888;
@@ -174,19 +232,18 @@ div.mngsk-recent-content dd {
   opacity: 0.6;
 }
 
+/* 4. select スタイル */
 .mngsk-recent-content__filters--select .mngsk-recent-content__filter-form {
   display: flex;
   align-items: center;
   gap: 0.4em;
 }
-
 .mngsk-recent-content__filter-select {
   padding: 0.25em 0.5em;
   font-size: 90%;
   border: 1px solid #ccc;
   border-radius: 3px;
 }
-
 .mngsk-recent-content__filter-submit {
   padding: 0.25em 0.6em;
   font-size: 85%;

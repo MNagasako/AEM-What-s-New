@@ -30,6 +30,10 @@ final class Mngsk_Recent_Content_List {
 	const MAX_AJAX_ATTS_BYTES = 4096;
 	const MAX_AJAX_ATTRIBUTE_BYTES = 512;
 	const MAX_LIST_VALUES = 50;
+	/** カテゴリUI専用オプション名(各term_idの日本語/英語ラベルおよび表示順)。 */
+	const CATEGORY_UI_OPTION      = 'mngsk_recent_content_category_ui';
+	const MAX_CATEGORY_UI_ITEMS   = 50;
+	const MAX_LABEL_LENGTH         = 100;
 	/** ページネーション有効時に使うURLクエリ引数名。WPの`paged`は既存のアーカイブ/投稿ページ分割と衝突するため専用の名前にしてある。 */
 	const PAGE_QUERY_VAR    = 'mngsk_recent_content_page';
 	/** カテゴリフィルタ有効時に使うURLクエリ引数名。 */
@@ -137,7 +141,7 @@ final class Mngsk_Recent_Content_List {
 			'date_to'                 => '',                // 対象期間の終了日(Y-m-d、空で無指定)
 			'category_filter'         => '',                // 閲覧者が切り替えられる候補カテゴリ(空でフィルタ無効)
 			'category_filter_default' => 'all',             // 初期選択カテゴリ(all または スラッグ/ID/名前)
-			'category_filter_style'   => 'buttons',         // buttons(ボタン) | select(プルダウン)
+			'category_filter_style'   => 'links',           // links(テキストリンク) | underline(下線タブ) | pills(ボタン) | select(プルダウン)
 			'category_filter_all'     => 'yes',             // 「すべて」を表示するか(yes | no)
 			'instance'                => '',                // 同一ページ内の配置インスタンス識別子(空で共通クエリ変数)
 		);
@@ -205,7 +209,7 @@ final class Mngsk_Recent_Content_List {
 				'label_newmark_latest'   => '最新1件に常にNEW!を付ける',
 				'label_newmark_text'     => 'NEW!マークの文字列',
 				'desc_newmark_text'      => '空にするとマーク自体を表示しない',
-				'label_date_format'      => '日付フォーマット',
+				'date_format'            => '日付フォーマット',
 				'desc_date_format'       => '空欄で「設定 > 一般」の日付形式を使用(PHPのdate()書式)。和暦表示用の特別な値も指定できる(明治以降の元号に対応): wareki=令和7年7月27日、wareki_year=令和元/令和7、wareki_year_numeric=令和1/令和7、wareki_year_02d=令和01/令和07。これらのキーワードの直後に続けた文字はdate()書式として評価される(例: wareki_year_02d年 → 令和07年、wareki_year年n月j日 → 令和7年7月27日)',
 				'label_empty_text'       => '0件時の表示文言',
 				'desc_empty_text'        => '空にすると非表示',
@@ -237,15 +241,23 @@ final class Mngsk_Recent_Content_List {
 				'label_date_to'          => '対象期間(終了日)',
 				'desc_date_to'           => 'この日付以前の投稿のみを対象にする。空欄で無指定',
 				'label_category_filter'  => 'カテゴリフィルタ(切替候補)',
-				'desc_category_filter'   => '閲覧者がボタン等で切り替えられるカテゴリ候補。チェックしたカテゴリが切替対象になる(空ですべてのカテゴリフィルタを無効化)',
+				'desc_category_filter'   => '閲覧者がボタン等で切り替えられるカテゴリ候補。チェックしたカテゴリが切替対象になり、言語ごとの表示名や並び順も設定できます',
 				'label_category_filter_default' => '初期選択カテゴリ',
 				'desc_category_filter_default'  => '初期表示時に選択されるカテゴリのスラッグ/名前/ID(all で「すべて」)',
 				'label_category_filter_style'   => 'フィルタの表示方式',
-				'desc_category_filter_style'    => '「ボタン」は横並びのボタンスタイル、「プルダウン」はセレクトボックス',
-				'choice_filter_style_buttons'   => 'ボタン(既定)',
+				'desc_category_filter_style'    => '「テキストリンク」は控えめな All | TIPS | Notices 形式、「下線タブ」は下線強調、「ピル」は角丸ボタン、「プルダウン」はセレクトボックス',
+				'choice_filter_style_links'     => 'テキストリンク(既定、All | TIPS | ...)',
+				'choice_filter_style_underline' => '下線タブ',
+				'choice_filter_style_pills'     => 'ピル(ボタン型)',
+				'choice_filter_style_buttons'   => 'ピル(ボタン型)',
 				'choice_filter_style_select'    => 'プルダウン(セレクト)',
 				'label_category_filter_all'     => '「すべて」の選択肢を表示する',
 				'desc_category_filter_all'      => 'チェックを外すと「すべて」ボタンを非表示にし、いずれかの候補カテゴリのみ選択可能にする',
+				'th_category_use'        => '使用',
+				'th_category_name'       => 'カテゴリ',
+				'th_label_ja'            => '日本語ラベル',
+				'th_label_en'            => 'English label',
+				'th_category_order'      => '表示順',
 				'filter_all_text'        => 'すべて',
 				'filter_select_label'    => 'カテゴリで絞り込み',
 				'filter_select_submit'   => '絞り込む',
@@ -325,15 +337,23 @@ final class Mngsk_Recent_Content_List {
 				'label_date_to'          => 'Date range (to)',
 				'desc_date_to'           => 'Only include items on or before this date. Leave empty for no upper bound',
 				'label_category_filter'  => 'Category filter (choices)',
-				'desc_category_filter'   => 'Categories users can switch between. Checked categories will appear as filter options (leave empty to disable the filter)',
+				'desc_category_filter'   => 'Categories users can switch between. Checked categories will appear as filter options, with customizable multilingual labels and ordering',
 				'label_category_filter_default' => 'Default category',
 				'desc_category_filter_default'  => 'Slug, name, or ID of the category selected on load ("all" for all categories)',
 				'label_category_filter_style'   => 'Filter style',
-				'desc_category_filter_style'    => '"Buttons" shows a row of clickable button-links, "Dropdown" shows a select box',
-				'choice_filter_style_buttons'   => 'Buttons (default)',
+				'desc_category_filter_style'    => '"Text links" displays a clean All | TIPS | Notices list, "Underline" shows tab-like underlines, "Pills" shows rounded buttons, "Dropdown" shows a select box',
+				'choice_filter_style_links'     => 'Text links (default, All | TIPS | ...)',
+				'choice_filter_style_underline' => 'Underline tabs',
+				'choice_filter_style_pills'     => 'Pills (buttons)',
+				'choice_filter_style_buttons'   => 'Pills (buttons)',
 				'choice_filter_style_select'    => 'Dropdown (Select)',
 				'label_category_filter_all'     => 'Show "All" option',
 				'desc_category_filter_all'      => 'Uncheck to hide the "All" option and require selecting a specific category',
+				'th_category_use'        => 'Use',
+				'th_category_name'       => 'Category',
+				'th_label_ja'            => 'Japanese label',
+				'th_label_en'            => 'English label',
+				'th_category_order'      => 'Order',
 				'filter_all_text'        => 'All',
 				'filter_select_label'    => 'Filter by category',
 				'filter_select_submit'   => 'Filter',
@@ -485,8 +505,10 @@ final class Mngsk_Recent_Content_List {
 				'label'   => self::t( 'label_category_filter_style' ),
 				'desc'    => self::t( 'desc_category_filter_style' ),
 				'choices' => array(
-					'buttons' => self::t( 'choice_filter_style_buttons' ),
-					'select'  => self::t( 'choice_filter_style_select' ),
+					'links'     => self::t( 'choice_filter_style_links' ),
+					'underline' => self::t( 'choice_filter_style_underline' ),
+					'pills'     => self::t( 'choice_filter_style_pills' ),
+					'select'    => self::t( 'choice_filter_style_select' ),
 				),
 			),
 			'category_filter_all' => array(
@@ -729,6 +751,83 @@ final class Mngsk_Recent_Content_List {
 	}
 
 	/**
+	 * 保存済みのカテゴリUI設定(日本語/英語ラベル・表示順)を取得する。
+	 *
+	 * @return array<int, array{label_ja: string, label_en: string, order: int}>
+	 */
+	public static function category_ui_options() {
+		$saved = get_option( self::CATEGORY_UI_OPTION, null );
+
+		return is_array( $saved ) ? $saved : array();
+	}
+
+	/**
+	 * カテゴリUI設定のサニタイズ。
+	 *
+	 * @param mixed $input
+	 * @return array<int, array{label_ja: string, label_en: string, order: int}>
+	 */
+	public static function sanitize_category_ui_options( $input ) {
+		if ( ! is_array( $input ) ) {
+			return array();
+		}
+
+		$out   = array();
+		$count = 0;
+		foreach ( $input as $raw_id => $row ) {
+			if ( $count >= self::MAX_CATEGORY_UI_ITEMS ) {
+				break;
+			}
+			$term_id = absint( $raw_id );
+			if ( $term_id <= 0 || ! is_array( $row ) ) {
+				continue;
+			}
+
+			$label_ja = isset( $row['label_ja'] ) ? mb_substr( sanitize_text_field( (string) $row['label_ja'] ), 0, self::MAX_LABEL_LENGTH ) : '';
+			$label_en = isset( $row['label_en'] ) ? mb_substr( sanitize_text_field( (string) $row['label_en'] ), 0, self::MAX_LABEL_LENGTH ) : '';
+			$order    = isset( $row['order'] ) ? min( 99999, max( 0, absint( $row['order'] ) ) ) : 10;
+
+			$out[ $term_id ] = array(
+				'label_ja' => $label_ja,
+				'label_en' => $label_en,
+				'order'    => $order,
+			);
+			$count++;
+		}
+
+		return $out;
+	}
+
+	/**
+	 * 現在のロケールに応じたカテゴリの表示ラベルを解決する。
+	 *
+	 * @param WP_Term                      $term
+	 * @param string                       $locale
+	 * @param array<int, array<string, mixed>> $ui_options
+	 * @return string
+	 */
+	private static function resolve_category_label( WP_Term $term, $locale = '', array $ui_options = array() ) {
+		if ( empty( $ui_options ) ) {
+			$ui_options = self::category_ui_options();
+		}
+
+		$term_id = (int) $term->term_id;
+		$is_ja   = ( '' !== $locale ) ? ( 0 === strpos( $locale, 'ja' ) ) : ( 'ja' === self::current_lang() );
+
+		if ( isset( $ui_options[ $term_id ] ) ) {
+			$row = $ui_options[ $term_id ];
+			if ( $is_ja && ! empty( $row['label_ja'] ) ) {
+				return $row['label_ja'];
+			}
+			if ( ! $is_ja && ! empty( $row['label_en'] ) ) {
+				return $row['label_en'];
+			}
+		}
+
+		return $term->name;
+	}
+
+	/**
 	 * 保存前のサニタイズ。値の正規化(カテゴリ解決等)はrender()側でまとめて行うため、
 	 * ここでは型・範囲のチェックのみ行う。
 	 */
@@ -757,13 +856,24 @@ final class Mngsk_Recent_Content_List {
 			foreach ( $input['category_filter'] as $val ) {
 				$filter_slugs[] = sanitize_text_field( (string) $val );
 			}
-			$out['category_filter'] = implode( ',', array_filter( $filter_slugs ) );
+			$out['category_filter'] = implode( ',', array_slice( array_filter( $filter_slugs ), 0, self::MAX_LIST_VALUES ) );
 		} else {
 			$out['category_filter'] = isset( $input['category_filter'] ) ? sanitize_text_field( $input['category_filter'] ) : '';
 		}
 
+		// category_uiの保存
+		if ( isset( $_POST[ self::CATEGORY_UI_OPTION ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			$clean_ui = self::sanitize_category_ui_options( wp_unslash( $_POST[ self::CATEGORY_UI_OPTION ] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			update_option( self::CATEGORY_UI_OPTION, $clean_ui );
+		}
+
 		$out['category_filter_default'] = isset( $input['category_filter_default'] ) ? sanitize_text_field( $input['category_filter_default'] ) : 'all';
-		$out['category_filter_style']   = ( isset( $input['category_filter_style'] ) && 'select' === $input['category_filter_style'] ) ? 'select' : 'buttons';
+
+		$style_raw = $input['category_filter_style'] ?? 'links';
+		if ( 'buttons' === $style_raw ) {
+			$style_raw = 'pills'; // 後方互換alias
+		}
+		$out['category_filter_style']   = in_array( $style_raw, array( 'links', 'underline', 'pills', 'select' ), true ) ? $style_raw : 'links';
 		$out['category_filter_all']     = ! empty( $input['category_filter_all'] ) ? 'yes' : 'no';
 
 		$out['orderby']          = ( isset( $input['orderby'] ) && 'modified' === $input['orderby'] ) ? 'modified' : 'date';
@@ -873,18 +983,70 @@ final class Mngsk_Recent_Content_List {
 			case 'categories':
 				$checked_cats = self::split_list( $value );
 				$all_cats     = get_categories( array( 'hide_empty' => false ) );
+				$ui_opts      = self::category_ui_options();
+
 				if ( ! empty( $all_cats ) ) {
-					echo '<div style="max-height:160px;overflow-y:auto;border:1px solid #ccd0d4;padding:6px 10px;background:#fff;max-width:400px;">';
+					// 保存済みorder順にソート(未設定は10)
+					usort(
+						$all_cats,
+						function ( $a, $b ) use ( $ui_opts ) {
+							$order_a = isset( $ui_opts[ $a->term_id ]['order'] ) ? (int) $ui_opts[ $a->term_id ]['order'] : 10;
+							$order_b = isset( $ui_opts[ $b->term_id ]['order'] ) ? (int) $ui_opts[ $b->term_id ]['order'] : 10;
+							if ( $order_a === $order_b ) {
+								return $a->term_id <=> $b->term_id;
+							}
+							return $order_a <=> $order_b;
+						}
+					);
+
+					echo '<div style="max-height:280px;overflow-y:auto;border:1px solid #ccd0d4;background:#fff;max-width:680px;">';
+					echo '<table class="widefat striped" style="border:none;margin:0;">';
+					echo '<thead><tr>';
+					echo '<th style="width:40px;text-align:center;padding:6px 8px;">' . esc_html( self::t( 'th_category_use' ) ) . '</th>';
+					echo '<th style="padding:6px 8px;">' . esc_html( self::t( 'th_category_name' ) ) . '</th>';
+					echo '<th style="padding:6px 8px;width:150px;">' . esc_html( self::t( 'th_label_ja' ) ) . '</th>';
+					echo '<th style="padding:6px 8px;width:150px;">' . esc_html( self::t( 'th_label_en' ) ) . '</th>';
+					echo '<th style="padding:6px 8px;width:65px;">' . esc_html( self::t( 'th_category_order' ) ) . '</th>';
+					echo '</tr></thead>';
+					echo '<tbody>';
+					$default_order = 10;
 					foreach ( $all_cats as $cat ) {
 						$is_checked = in_array( $cat->slug, $checked_cats, true ) || in_array( (string) $cat->term_id, $checked_cats, true ) || in_array( $cat->name, $checked_cats, true );
+						$label_ja   = $ui_opts[ $cat->term_id ]['label_ja'] ?? '';
+						$label_en   = $ui_opts[ $cat->term_id ]['label_en'] ?? '';
+						$cat_order  = isset( $ui_opts[ $cat->term_id ]['order'] ) ? (int) $ui_opts[ $cat->term_id ]['order'] : $default_order;
+						$default_order += 10;
+
 						printf(
-							'<div><label><input type="checkbox" name="%1$s[]" value="%2$s"%3$s /> %4$s <code style="font-size:85%%;">(%2$s)</code></label></div>',
+							'<tr>
+								<td style="text-align:center;vertical-align:middle;padding:6px 8px;">
+									<input type="checkbox" name="%1$s[]" value="%2$s"%3$s />
+								</td>
+								<td style="vertical-align:middle;padding:6px 8px;">
+									<strong>%4$s</strong><br /><code style="font-size:85%%;">%2$s</code>
+								</td>
+								<td style="vertical-align:middle;padding:6px 8px;">
+									<input type="text" name="%5$s[%6$d][label_ja]" value="%7$s" placeholder="%4$s" style="width:100%%;" maxlength="100" />
+								</td>
+								<td style="vertical-align:middle;padding:6px 8px;">
+									<input type="text" name="%5$s[%6$d][label_en]" value="%8$s" placeholder="%4$s" style="width:100%%;" maxlength="100" />
+								</td>
+								<td style="vertical-align:middle;padding:6px 8px;">
+									<input type="number" name="%5$s[%6$d][order]" value="%9$d" min="0" max="99999" style="width:60px;" />
+								</td>
+							</tr>',
 							esc_attr( $name ),
 							esc_attr( $cat->slug ),
 							checked( $is_checked, true, false ),
-							esc_html( $cat->name )
+							esc_html( $cat->name ),
+							esc_attr( self::CATEGORY_UI_OPTION ),
+							(int) $cat->term_id,
+							esc_attr( $label_ja ),
+							esc_attr( $label_en ),
+							(int) $cat_order
 						);
 					}
+					echo '</tbody></table>';
 					echo '</div>';
 				} else {
 					printf(
@@ -983,6 +1145,8 @@ final class Mngsk_Recent_Content_List {
 	 * @param string|null $forced_category       Ajaxから指定するカテゴリフィルタ値(空・nullで通常判定)。
 	 */
 	private static function render_list( $atts = array(), $forced_page = null, $incremental_load_more = false, $forced_locale = '', $base_url = '', $forced_category = null ) {
+		$raw_category_filter = $atts['category_filter'] ?? null;
+		$is_filter_explicit  = ( null !== $raw_category_filter && '' !== $raw_category_filter );
 		$atts = shortcode_atts( self::defaults(), $atts, self::SHORTCODE );
 
 		$active_locale   = ( '' !== $forced_locale ) ? $forced_locale : self::current_locale();
@@ -992,7 +1156,7 @@ final class Mngsk_Recent_Content_List {
 		$page_query_var  = self::page_query_var( $instance );
 		$cat_query_var   = self::category_query_var( $instance );
 
-		$filter_terms    = self::resolve_filter_categories( $atts['category_filter'] );
+		$filter_terms    = self::resolve_filter_categories( $atts['category_filter'], $is_filter_explicit );
 		$has_filter      = ! empty( $filter_terms );
 		$requested_cat   = ( null !== $forced_category ) ? $forced_category : self::current_category( $instance );
 		$active_info     = self::resolve_active_category(
@@ -1088,7 +1252,7 @@ final class Mngsk_Recent_Content_List {
 			: '';
 
 		$filter_html = $has_filter
-			? self::render_category_filter( $filter_terms, $active_info, $atts, $request_url )
+			? self::render_category_filter( $filter_terms, $active_info, $atts, $request_url, $active_locale )
 			: '';
 
 		wp_enqueue_style( self::STYLE_HANDLE );
@@ -1256,9 +1420,10 @@ final class Mngsk_Recent_Content_List {
 	 * category_filter属性の指定から有効なWP_Termオブジェクトのリストを取得する。
 	 *
 	 * @param mixed $value
+	 * @param bool  $is_explicit shortcodeで属性が明示指定されたかどうか
 	 * @return WP_Term[]
 	 */
-	private static function resolve_filter_categories( $value ) {
+	private static function resolve_filter_categories( $value, $is_explicit = false ) {
 		$ids = self::resolve_category_ids( $value );
 		if ( empty( $ids ) ) {
 			return array();
@@ -1270,6 +1435,22 @@ final class Mngsk_Recent_Content_List {
 			if ( $term instanceof WP_Term && ! is_wp_error( $term ) ) {
 				$terms[] = $term;
 			}
+		}
+
+		// shortcodeで明示されていない場合(管理画面設定準拠)は、保存済みorder昇順でソート
+		if ( ! $is_explicit && ! empty( $terms ) ) {
+			$ui_opts = self::category_ui_options();
+			usort(
+				$terms,
+				function ( $a, $b ) use ( $ui_opts ) {
+					$order_a = isset( $ui_opts[ $a->term_id ]['order'] ) ? (int) $ui_opts[ $a->term_id ]['order'] : 10;
+					$order_b = isset( $ui_opts[ $b->term_id ]['order'] ) ? (int) $ui_opts[ $b->term_id ]['order'] : 10;
+					if ( $order_a === $order_b ) {
+						return $a->term_id <=> $b->term_id;
+					}
+					return $order_a <=> $order_b;
+				}
+			);
 		}
 
 		return $terms;
@@ -1390,32 +1571,44 @@ final class Mngsk_Recent_Content_List {
 	 * @param array     $active_info
 	 * @param array     $atts
 	 * @param string    $base_url
+	 * @param string    $locale
 	 * @return string
 	 */
-	private static function render_category_filter( array $filter_terms, array $active_info, array $atts, $base_url = '' ) {
+	private static function render_category_filter( array $filter_terms, array $active_info, array $atts, $base_url = '', $locale = '' ) {
 		if ( empty( $filter_terms ) ) {
 			return '';
 		}
 
-		$style          = ( 'select' === ( $atts['category_filter_style'] ?? '' ) ) ? 'select' : 'buttons';
+		$style_raw = $atts['category_filter_style'] ?? 'links';
+		if ( 'buttons' === $style_raw ) {
+			$style_raw = 'pills'; // 後方互換alias
+		}
+		$style          = in_array( $style_raw, array( 'links', 'underline', 'pills', 'select' ), true ) ? $style_raw : 'links';
 		$show_all       = self::is_truthy( $atts['category_filter_all'] ?? 'yes' );
 		$instance       = self::resolve_instance( $atts['instance'] ?? '' );
 		$cat_query_var  = self::category_query_var( $instance );
 		$page_query_var = self::page_query_var( $instance );
+		$ui_opts        = self::category_ui_options();
 
 		$active_slug = $active_info['slug'];
 
 		$items = array();
 		if ( $show_all ) {
 			$items[] = array(
-				'slug' => 'all',
-				'name' => self::t( 'filter_all_text' ),
+				'slug'      => 'all',
+				'safe_slug' => 'all',
+				'name'      => self::t( 'filter_all_text' ),
 			);
 		}
 		foreach ( $filter_terms as $term ) {
+			$safe = sanitize_html_class( $term->slug );
+			if ( '' === $safe ) {
+				$safe = 'term-' . $term->term_id;
+			}
 			$items[] = array(
-				'slug' => $term->slug,
-				'name' => $term->name,
+				'slug'      => $term->slug,
+				'safe_slug' => $safe,
+				'name'      => self::resolve_category_label( $term, $locale, $ui_opts ),
 			);
 		}
 
@@ -1454,25 +1647,24 @@ final class Mngsk_Recent_Content_List {
 				</option>
 			<?php endforeach; ?>
 		</select>
-		<noscript>
-			<button type="submit" class="mngsk-recent-content__filter-submit"><?php echo esc_html( self::t( 'filter_select_submit' ) ); ?></button>
-		</noscript>
+		<button type="submit" class="mngsk-recent-content__filter-submit"><?php echo esc_html( self::t( 'filter_select_submit' ) ); ?></button>
 	</form>
 </div>
 			<?php
 		} else {
+			$container_class = 'mngsk-recent-content__filters mngsk-recent-content__filters--' . $style;
 			?>
-<nav class="mngsk-recent-content__filters mngsk-recent-content__filters--buttons" aria-label="<?php echo esc_attr( self::t( 'label_category_filter' ) ); ?>">
+<nav class="<?php echo esc_attr( $container_class ); ?>" aria-label="<?php echo esc_attr( self::t( 'label_category_filter' ) ); ?>">
 			<?php foreach ( $items as $item ) : ?>
 				<?php
-				$is_active  = ( $item['slug'] === $active_slug );
-				$filter_url = remove_query_arg( $page_query_var, $base_url );
+				$is_active    = ( $item['slug'] === $active_slug );
+				$filter_url   = remove_query_arg( $page_query_var, $base_url );
 				if ( 'all' === $item['slug'] ) {
 					$filter_url = remove_query_arg( $cat_query_var, $filter_url );
 				} else {
 					$filter_url = add_query_arg( $cat_query_var, $item['slug'], $filter_url );
 				}
-				$link_classes = 'mngsk-recent-content__filter';
+				$link_classes = 'mngsk-recent-content__filter mngsk-recent-content__filter--category-' . $item['safe_slug'];
 				if ( $is_active ) {
 					$link_classes .= ' mngsk-recent-content__filter--active';
 				}

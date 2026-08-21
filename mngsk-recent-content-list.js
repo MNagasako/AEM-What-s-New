@@ -4,10 +4,10 @@
  * ビルド手順を持たないプラグインのため、フレームワーク無しの素のJSで記述。
  * .mngsk-recent-content[data-mngsk-recent-content-async] 要素内で以下を処理する:
  * 1. ページネーションリンク (.mngsk-recent-content__pagination a) の非同期ページ送り
- * 2. カテゴリフィルタボタン (.mngsk-recent-content__filter) / プルダウン (.mngsk-recent-content__filter-select) の非同期カテゴリ切替
+ * 2. カテゴリフィルタリンク (.mngsk-recent-content__filter) / プルダウン (.mngsk-recent-content__filter-select) の非同期カテゴリ切替
  *
  * キャッシュ & プリフェッチ:
- * - キャッシュキーは `category + ':' + page` (例: "all:1", "news:2")。
+ * - キャッシュキーは `category + ':' + page + ':' + mode` (例: "all:1:page", "news:2:incremental")。
  * - ページ表示完了時、現在カテゴリの次ページをブラウザアイドル時に裏で先読み。
  * - フィルタボタンやページリンクへのマウスホバー/フォーカス時にも該当データを先読み。
  * - 同一キーへの重複リクエストは Promise を共有。
@@ -77,13 +77,13 @@
 
 	function initState( container ) {
 		if ( ! container.__mngskCache ) {
-			container.__mngskCache = {}; // "category:page" -> HTML
-			container.__mngskInFlight = {}; // "category:page" -> Promise
+			container.__mngskCache = {}; // "category:page:mode" -> HTML
+			container.__mngskInFlight = {}; // "category:page:mode" -> Promise
 		}
 	}
 
-	function makeKey( category, page ) {
-		return String( category || 'all' ) + ':' + String( page || 1 );
+	function makeKey( category, page, mode ) {
+		return String( category || 'all' ) + ':' + String( page || 1 ) + ':' + String( mode || 'page' );
 	}
 
 	/**
@@ -94,7 +94,8 @@
 		initState( container );
 		category = String( category || 'all' );
 		page = parseInt( page, 10 ) || 1;
-		var key = makeKey( category, page );
+		var mode = ( incremental && isLoadMore( container ) ) ? 'incremental' : 'page';
+		var key = makeKey( category, page, mode );
 
 		if ( container.__mngskCache[ key ] ) {
 			if ( activate ) {
@@ -250,9 +251,10 @@
 			return;
 		}
 		var cat = activeCategory( container );
+		var incremental = isLoadMore( container );
 
 		var run = function () {
-			fetchContent( container, cat, next, false );
+			fetchContent( container, cat, next, false, 0, incremental );
 		};
 
 		if ( window.requestIdleCallback ) {
@@ -272,7 +274,7 @@
 
 	function filterLinkFromEvent( container, event ) {
 		var link = event.target.closest ? event.target.closest( 'a' ) : null;
-		if ( ! link || ! container.contains( link ) || ! link.closest( '.mngsk-recent-content__filters--buttons' ) ) {
+		if ( ! link || ! container.contains( link ) || ! link.classList.contains( 'mngsk-recent-content__filter' ) ) {
 			return null;
 		}
 		return link;
@@ -284,6 +286,14 @@
 			return null;
 		}
 		return select;
+	}
+
+	function filterSubmitButtonFromEvent( container, event ) {
+		var button = event.target.closest ? event.target.closest( '.mngsk-recent-content__filter-submit' ) : null;
+		if ( ! button || ! container.contains( button ) ) {
+			return null;
+		}
+		return button;
 	}
 
 	function handleClick( container, event ) {
@@ -314,7 +324,7 @@
 			return;
 		}
 
-		// 2. カテゴリフィルタボタンのクリック
+		// 2. カテゴリフィルタリンクのクリック (links, underline, pills)
 		var filterLink = filterLinkFromEvent( container, event );
 		if ( filterLink ) {
 			var targetCat = filterLink.getAttribute( 'data-category' ) || 'all';
@@ -337,6 +347,17 @@
 				.then( function () {
 					filterLink.removeAttribute( 'aria-busy' );
 				} );
+			return;
+		}
+
+		// 3. select用submitボタンのクリック (asyncモード時はボタンクリックでも非同期更新)
+		var filterBtn = filterSubmitButtonFromEvent( container, event );
+		if ( filterBtn ) {
+			event.preventDefault();
+			var select = container.querySelector( '.mngsk-recent-content__filter-select' );
+			if ( select ) {
+				handleChange( container, { target: select } );
+			}
 		}
 	}
 
@@ -382,16 +403,17 @@
 		if ( pageLink ) {
 			var page = pageFromLink( pageLink, container );
 			if ( page ) {
-				fetchContent( container, activeCategory( container ), page, false );
+				var incremental = isLoadMore( container );
+				fetchContent( container, activeCategory( container ), page, false, 0, incremental );
 			}
 			return;
 		}
 
-		// フィルタボタンのホバー (当該カテゴリの1ページ目を先読み)
+		// フィルタリンクのホバー (当該カテゴリの1ページ目を先読み)
 		var filterLink = filterLinkFromEvent( container, event );
 		if ( filterLink ) {
 			var cat = filterLink.getAttribute( 'data-category' ) || 'all';
-			fetchContent( container, cat, 1, false );
+			fetchContent( container, cat, 1, false, 0, false );
 		}
 	}
 

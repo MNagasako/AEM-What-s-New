@@ -48,9 +48,11 @@ Only `pagination_mode="async"`. The default `sync` mode works with ordinary link
 == Changelog ==
 
 = 1.7.0 =
-* Added front-end category filter support (`category_filter`, `category_filter_default`, `category_filter_style`, `category_filter_all`).
+* Added front-end category filter support (`category_filter`, `category_filter_default`, `category_filter_style`, `category_filter_all`) with 4 display styles: text links (`links`, default), underline tabs (`underline`), rounded pills (`pills`), and dropdown select (`select`).
+* Added customizable multilingual category labels (JA/EN) and display ordering in admin settings.
+* Preserved explicit shortcode token ordering when `category_filter` is specified.
 * Added `instance` attribute for independent pagination and filter state across multiple list instances on a single page.
-* Added compound client cache key (`category:page`) and category-aware prefetching for asynchronous mode.
+* Separated client cache keys (`category:page:mode`) to eliminate duplicate entry issues during load-more prefetching.
 * Maintained full backward compatibility with existing shortcodes, pagination modes, and multilingual plugins (Bogo, Polylang).
 
 = 1.6.4 =
