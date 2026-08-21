@@ -3,7 +3,7 @@
  * Plugin Name: Mngsk Recent Content List
  * Plugin URI:  https://github.com/MNagasako/AEM-What-s-New
  * Description: 新着情報一覧をWordPress標準API(WP_Query + ショートコードAPI)だけで表示する。外部プラグイン「What's New Generator」の置き換え。
- * Version:     1.6.4
+ * Version:     1.7.0
  * Author:      M.N.
  * License:     GPL-2.0-or-later
  * Requires at least: 6.0
@@ -19,7 +19,7 @@ if ( ! class_exists( 'Mngsk_Recent_Content_List' ) ) {
 
 final class Mngsk_Recent_Content_List {
 
-	const VERSION           = '1.6.4';
+	const VERSION           = '1.7.0';
 	const SHORTCODE         = 'mngsk_recent_content';
 	const STYLE_HANDLE      = 'mngsk-recent-content';
 	const OPTION_NAME       = 'mngsk_recent_content_options';
@@ -30,8 +30,14 @@ final class Mngsk_Recent_Content_List {
 	const MAX_AJAX_ATTS_BYTES = 4096;
 	const MAX_AJAX_ATTRIBUTE_BYTES = 512;
 	const MAX_LIST_VALUES = 50;
+	/** カテゴリUI専用オプション名(各term_idの日本語/英語ラベルおよび表示順)。 */
+	const CATEGORY_UI_OPTION      = 'mngsk_recent_content_category_ui';
+	const MAX_CATEGORY_UI_ITEMS   = 50;
+	const MAX_LABEL_LENGTH         = 100;
 	/** ページネーション有効時に使うURLクエリ引数名。WPの`paged`は既存のアーカイブ/投稿ページ分割と衝突するため専用の名前にしてある。 */
 	const PAGE_QUERY_VAR    = 'mngsk_recent_content_page';
+	/** カテゴリフィルタ有効時に使うURLクエリ引数名。 */
+	const CATEGORY_QUERY_VAR = 'mngsk_recent_content_category';
 
 	/** 見出しに許可するタグ。これ以外が指定されたら p に落とす。 */
 	const ALLOWED_TITLE_TAGS = array( 'p', 'h2', 'h3', 'h4', 'h5', 'h6', 'div' );
@@ -95,6 +101,7 @@ final class Mngsk_Recent_Content_List {
 				'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
 				'action'    => self::AJAX_ACTION,
 				'pageParam' => self::PAGE_QUERY_VAR,
+				'catParam'  => self::CATEGORY_QUERY_VAR,
 			)
 		);
 	}
@@ -106,32 +113,37 @@ final class Mngsk_Recent_Content_List {
 	 */
 	private static function hard_defaults() {
 		return array(
-			'title'            => self::t( 'default_title' ),
-			'title_tag'        => 'p',
-			'title_max_length' => '0',               // 0で切り詰めなし
-			'post_type'        => 'post,page',
-			'show_type'        => 'no',               // 投稿タイプ列を表示するか
-			'number'           => '10',
-			'orderby'          => 'date',            // date | modified
-			'layout'           => 'stacked',          // stacked(積み重ね) | inline(1行)
-			'category'         => '',                // 表示対象に含めるカテゴリ(空=全部)
-			'show_category'    => 'no',               // カテゴリ列を表示するか
-			'category_limit'   => '3',               // 1件あたりのカテゴリ列挙数上限(0で上限なし)
-			'exclude_category' => 'exclude-from-whatsnew,uncategorized',
-			'exclude_ids'      => '',                // 投稿ID/固定ページIDで個別除外
-			'newmark_days'     => '30',              // 0でNEW!マークを無効化
-			'newmark_latest'   => 'yes',             // 最新1件には常にNEW!を付ける
-			'newmark_text'     => self::t( 'default_newmark_text' ),
-			'date_format'      => '',                // 空=「設定 > 一般」の日付フォーマット
-			'empty_text'       => self::t( 'default_empty_text' ),
-			'ui_language'      => 'auto',             // auto | ja | en (管理画面表示と上記既定文言に使う)
-			'pagination'       => 'no',               // ページネーションを有効にするか
-			'pagination_mode'  => 'sync',              // sync(通常のリンク遷移) | async(Ajaxでその場更新)
-			'pagination_style' => 'numbers',           // numbers | prev_next | load_more
-			'pagination_position' => 'bottom_left',   // bottom_left | bottom_right | top_right(見出しの右端)
-			'pagination_max_items' => '0',            // ページネーションで辿れる総件数の上限(0で上限なし)
-			'date_from'        => '',                // 対象期間の開始日(Y-m-d、空で無指定)
-			'date_to'          => '',                // 対象期間の終了日(Y-m-d、空で無指定)
+			'title'                   => self::t( 'default_title' ),
+			'title_tag'               => 'p',
+			'title_max_length'        => '0',               // 0で切り詰めなし
+			'post_type'               => 'post,page',
+			'show_type'               => 'no',               // 投稿タイプ列を表示するか
+			'number'                  => '10',
+			'orderby'                 => 'date',            // date | modified
+			'layout'                  => 'stacked',          // stacked(積み重ね) | inline(1行)
+			'category'                => '',                // 表示対象に含めるカテゴリ(空=全部)
+			'show_category'           => 'no',               // カテゴリ列を表示するか
+			'category_limit'          => '3',               // 1件あたりのカテゴリ列挙数上限(0で上限なし)
+			'exclude_category'        => 'exclude-from-whatsnew,uncategorized',
+			'exclude_ids'             => '',                // 投稿ID/固定ページIDで個別除外
+			'newmark_days'            => '30',              // 0でNEW!マークを無効化
+			'newmark_latest'          => 'yes',             // 最新1件には常にNEW!を付ける
+			'newmark_text'            => self::t( 'default_newmark_text' ),
+			'date_format'             => '',                // 空=「設定 > 一般」の日付フォーマット
+			'empty_text'              => self::t( 'default_empty_text' ),
+			'ui_language'             => 'auto',             // auto | ja | en (管理画面表示と上記既定文言に使う)
+			'pagination'              => 'no',               // ページネーションを有効にするか
+			'pagination_mode'         => 'sync',              // sync(通常のリンク遷移) | async(Ajaxでその場更新)
+			'pagination_style'        => 'numbers',           // numbers | prev_next | load_more
+			'pagination_position'     => 'bottom_left',   // bottom_left | bottom_right | top_right(見出しの右端)
+			'pagination_max_items'    => '0',            // ページネーションで辿れる総件数の上限(0で上限なし)
+			'date_from'               => '',                // 対象期間の開始日(Y-m-d、空で無指定)
+			'date_to'                 => '',                // 対象期間の終了日(Y-m-d、空で無指定)
+			'category_filter'         => '',                // 閲覧者が切り替えられる候補カテゴリ(空でフィルタ無効)
+			'category_filter_default' => 'all',             // 初期選択カテゴリ(all または スラッグ/ID/名前)
+			'category_filter_style'   => 'links',           // links(テキストリンク) | underline(下線タブ) | pills(ボタン) | select(プルダウン)
+			'category_filter_all'     => 'yes',             // 「すべて」を表示するか(yes | no)
+			'instance'                => '',                // 同一ページ内の配置インスタンス識別子(空で共通クエリ変数)
 		);
 	}
 
@@ -197,7 +209,7 @@ final class Mngsk_Recent_Content_List {
 				'label_newmark_latest'   => '最新1件に常にNEW!を付ける',
 				'label_newmark_text'     => 'NEW!マークの文字列',
 				'desc_newmark_text'      => '空にするとマーク自体を表示しない',
-				'label_date_format'      => '日付フォーマット',
+				'date_format'            => '日付フォーマット',
 				'desc_date_format'       => '空欄で「設定 > 一般」の日付形式を使用(PHPのdate()書式)。和暦表示用の特別な値も指定できる(明治以降の元号に対応): wareki=令和7年7月27日、wareki_year=令和元/令和7、wareki_year_numeric=令和1/令和7、wareki_year_02d=令和01/令和07。これらのキーワードの直後に続けた文字はdate()書式として評価される(例: wareki_year_02d年 → 令和07年、wareki_year年n月j日 → 令和7年7月27日)',
 				'label_empty_text'       => '0件時の表示文言',
 				'desc_empty_text'        => '空にすると非表示',
@@ -228,6 +240,31 @@ final class Mngsk_Recent_Content_List {
 				'desc_date_from'         => 'この日付以降の投稿のみを対象にする(投稿日/更新日は「並び順」の設定に従う)。空欄で無指定',
 				'label_date_to'          => '対象期間(終了日)',
 				'desc_date_to'           => 'この日付以前の投稿のみを対象にする。空欄で無指定',
+				'label_category_filter'  => 'カテゴリフィルタ(切替候補)',
+				'desc_category_filter'   => '閲覧者がボタン等で切り替えられるカテゴリ候補。チェックしたカテゴリが切替対象になり、言語ごとの表示名や並び順も設定できます',
+				'label_category_filter_default' => '初期選択カテゴリ',
+				'desc_category_filter_default'  => '初期表示時に選択されるカテゴリのスラッグ/名前/ID(all で「すべて」)',
+				'label_category_filter_style'   => 'フィルタの表示方式',
+				'desc_category_filter_style'    => '「テキストリンク」は控えめな All | TIPS | Notices 形式、「下線タブ」は下線強調、「ピル」は角丸ボタン、「プルダウン」はセレクトボックス',
+				'choice_filter_style_links'     => 'テキストリンク(既定、All | TIPS | ...)',
+				'choice_filter_style_underline' => '下線タブ',
+				'choice_filter_style_pills'     => 'ピル(ボタン型)',
+				'choice_filter_style_buttons'   => 'ピル(ボタン型)',
+				'choice_filter_style_select'    => 'プルダウン(セレクト)',
+				'label_category_filter_all'     => '「すべて」の選択肢を表示する',
+				'desc_category_filter_all'      => 'チェックを外すと「すべて」ボタンを非表示にし、いずれかの候補カテゴリのみ選択可能にする',
+				'th_category_use'        => '使用',
+				'th_category_name'       => 'カテゴリ',
+				'th_label_ja'            => '日本語ラベル',
+				'th_label_en'            => 'English label',
+				'th_category_order'      => '表示順',
+				'aria_category_use'      => '%s をフィルタ候補に使用',
+				'aria_label_ja'          => '%s の日本語表示ラベル',
+				'aria_label_en'          => '%s のEnglish表示ラベル',
+				'aria_category_order'    => '%s の表示順',
+				'filter_all_text'        => 'すべて',
+				'filter_select_label'    => 'カテゴリで絞り込み',
+				'filter_select_submit'   => '絞り込む',
 				'load_more_text'         => 'もっと見る',
 				'pagination_prev'        => '前へ',
 				'pagination_next'        => '次へ',
@@ -303,6 +340,31 @@ final class Mngsk_Recent_Content_List {
 				'desc_date_from'         => 'Only include items on or after this date (publish date or modified date, matching the "Order by" setting). Leave empty for no lower bound',
 				'label_date_to'          => 'Date range (to)',
 				'desc_date_to'           => 'Only include items on or before this date. Leave empty for no upper bound',
+				'label_category_filter'  => 'Category filter (choices)',
+				'desc_category_filter'   => 'Categories users can switch between. Checked categories will appear as filter options, with customizable multilingual labels and ordering',
+				'label_category_filter_default' => 'Default category',
+				'desc_category_filter_default'  => 'Slug, name, or ID of the category selected on load ("all" for all categories)',
+				'label_category_filter_style'   => 'Filter style',
+				'desc_category_filter_style'    => '"Text links" displays a clean All | TIPS | Notices list, "Underline" shows tab-like underlines, "Pills" shows rounded buttons, "Dropdown" shows a select box',
+				'choice_filter_style_links'     => 'Text links (default, All | TIPS | ...)',
+				'choice_filter_style_underline' => 'Underline tabs',
+				'choice_filter_style_pills'     => 'Pills (buttons)',
+				'choice_filter_style_buttons'   => 'Pills (buttons)',
+				'choice_filter_style_select'    => 'Dropdown (Select)',
+				'label_category_filter_all'     => 'Show "All" option',
+				'desc_category_filter_all'      => 'Uncheck to hide the "All" option and require selecting a specific category',
+				'th_category_use'        => 'Use',
+				'th_category_name'       => 'Category',
+				'th_label_ja'            => 'Japanese label',
+				'th_label_en'            => 'English label',
+				'th_category_order'      => 'Order',
+				'aria_category_use'      => 'Use %s for category filter',
+				'aria_label_ja'          => 'Japanese label for %s',
+				'aria_label_en'          => 'English label for %s',
+				'aria_category_order'    => 'Display order for %s',
+				'filter_all_text'        => 'All',
+				'filter_select_label'    => 'Filter by category',
+				'filter_select_submit'   => 'Filter',
 				'load_more_text'         => 'Load more',
 				'pagination_prev'        => 'Prev',
 				'pagination_next'        => 'Next',
@@ -436,6 +498,32 @@ final class Mngsk_Recent_Content_List {
 				'label' => self::t( 'label_date_to' ),
 				'desc'  => self::t( 'desc_date_to' ),
 			),
+			'category_filter'  => array(
+				'type'  => 'categories',
+				'label' => self::t( 'label_category_filter' ),
+				'desc'  => self::t( 'desc_category_filter' ),
+			),
+			'category_filter_default' => array(
+				'type'  => 'text',
+				'label' => self::t( 'label_category_filter_default' ),
+				'desc'  => self::t( 'desc_category_filter_default' ),
+			),
+			'category_filter_style' => array(
+				'type'    => 'select',
+				'label'   => self::t( 'label_category_filter_style' ),
+				'desc'    => self::t( 'desc_category_filter_style' ),
+				'choices' => array(
+					'links'     => self::t( 'choice_filter_style_links' ),
+					'underline' => self::t( 'choice_filter_style_underline' ),
+					'pills'     => self::t( 'choice_filter_style_pills' ),
+					'select'    => self::t( 'choice_filter_style_select' ),
+				),
+			),
+			'category_filter_all' => array(
+				'type'  => 'checkbox',
+				'label' => self::t( 'label_category_filter_all' ),
+				'desc'  => self::t( 'desc_category_filter_all' ),
+			),
 			'orderby'          => array(
 				'type'    => 'select',
 				'label'   => self::t( 'label_orderby' ),
@@ -544,6 +632,15 @@ final class Mngsk_Recent_Content_List {
 				'default'           => self::hard_defaults(),
 			)
 		);
+		register_setting(
+			self::SETTINGS_GROUP,
+			self::CATEGORY_UI_OPTION,
+			array(
+				'type'              => 'array',
+				'sanitize_callback' => array( __CLASS__, 'sanitize_category_ui_options' ),
+				'default'           => array(),
+			)
+		);
 	}
 
 	/**
@@ -590,20 +687,46 @@ final class Mngsk_Recent_Content_List {
 	 */
 	public static function ajax_paginate() {
 		$atts = self::ajax_atts_from_request();
-		$page = isset( $_POST['page'] ) ? absint( $_POST['page'] ) : 1; // phpcs:ignore WordPress.Security.NonceVerification.Missing
-		$incremental_load_more = isset( $_POST['incremental_load_more'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['incremental_load_more'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
+
+		$page = 1;
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 公開データの読み取り専用Ajaxエンドポイント
+		if ( isset( $_POST['page'] ) && ( is_numeric( $_POST['page'] ) || is_string( $_POST['page'] ) ) ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 公開データの読み取り専用Ajaxエンドポイント
+			$page = max( 1, absint( wp_unslash( $_POST['page'] ) ) );
+		}
+
+		$incremental_load_more = false;
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
+		if ( isset( $_POST['incremental_load_more'] ) && is_string( $_POST['incremental_load_more'] ) ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
+			$incremental_load_more = ( '1' === sanitize_text_field( wp_unslash( $_POST['incremental_load_more'] ) ) );
+		}
+
+		$requested_category = null;
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
+		if ( isset( $_POST['category'] ) && is_string( $_POST['category'] ) ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
+			$clean_cat = sanitize_text_field( wp_unslash( $_POST['category'] ) );
+			if ( '' !== $clean_cat && strlen( $clean_cat ) <= self::MAX_AJAX_ATTRIBUTE_BYTES ) {
+				$requested_category = $clean_cat;
+			}
+		}
 
 		$locale = '';
-		if ( isset( $_POST['locale'] ) && is_string( $_POST['locale'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
-			$raw_locale = sanitize_text_field( wp_unslash( $_POST['locale'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
-			if ( preg_match( '/^[a-zA-Z0-9_-]{2,30}$/', $raw_locale ) ) {
-				$locale = $raw_locale;
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
+		if ( isset( $_POST['locale'] ) && is_string( $_POST['locale'] ) ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
+			$clean_locale = sanitize_text_field( wp_unslash( $_POST['locale'] ) );
+			if ( preg_match( '/^[a-zA-Z0-9_-]{2,30}$/', $clean_locale ) ) {
+				$locale = $clean_locale;
 			}
 		}
 
 		$current_url = '';
-		if ( isset( $_POST['current_url'] ) && is_string( $_POST['current_url'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
-			$current_url = esc_url_raw( wp_unslash( $_POST['current_url'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
+		if ( isset( $_POST['current_url'] ) && is_string( $_POST['current_url'] ) ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
+			$current_url = esc_url_raw( wp_unslash( $_POST['current_url'] ) );
 		}
 
 		$switched = false;
@@ -611,7 +734,7 @@ final class Mngsk_Recent_Content_List {
 			$switched = switch_to_locale( $locale );
 		}
 
-		$html = self::render_list( $atts, max( 1, $page ), $incremental_load_more, $locale, $current_url );
+		$html = self::render_list( $atts, max( 1, $page ), $incremental_load_more, $locale, $current_url, $requested_category );
 
 		if ( $switched && function_exists( 'restore_previous_locale' ) ) {
 			restore_previous_locale();
@@ -628,11 +751,16 @@ final class Mngsk_Recent_Content_List {
 	 * @return array<string, string>
 	 */
 	private static function ajax_atts_from_request() {
-		if ( ! isset( $_POST['atts'] ) || ! is_string( $_POST['atts'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
+		if ( ! isset( $_POST['atts'] ) || ! is_string( $_POST['atts'] ) ) {
 			wp_send_json_error( array( 'message' => 'Invalid attributes.' ), 400 );
 		}
 
-		$raw = sanitize_textarea_field( wp_unslash( $_POST['atts'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用Ajax
+		$raw = sanitize_textarea_field( wp_unslash( $_POST['atts'] ) );
+		if ( '' === $raw ) {
+			wp_send_json_error( array( 'message' => 'Invalid attributes.' ), 400 );
+		}
 		if ( strlen( $raw ) > self::MAX_AJAX_ATTS_BYTES ) {
 			wp_send_json_error( array( 'message' => 'Attributes are too large.' ), 400 );
 		}
@@ -663,6 +791,83 @@ final class Mngsk_Recent_Content_List {
 	}
 
 	/**
+	 * 保存済みのカテゴリUI設定(日本語/英語ラベル・表示順)を取得する。
+	 *
+	 * @return array<int, array{label_ja: string, label_en: string, order: int}>
+	 */
+	public static function category_ui_options() {
+		$saved = get_option( self::CATEGORY_UI_OPTION, null );
+
+		return is_array( $saved ) ? $saved : array();
+	}
+
+	/**
+	 * カテゴリUI設定のサニタイズ。
+	 *
+	 * @param mixed $input
+	 * @return array<int, array{label_ja: string, label_en: string, order: int}>
+	 */
+	public static function sanitize_category_ui_options( $input ) {
+		if ( ! is_array( $input ) ) {
+			return array();
+		}
+
+		$out   = array();
+		$count = 0;
+		foreach ( $input as $raw_id => $row ) {
+			if ( $count >= self::MAX_CATEGORY_UI_ITEMS ) {
+				break;
+			}
+			$term_id = absint( $raw_id );
+			if ( $term_id <= 0 || ! is_array( $row ) ) {
+				continue;
+			}
+
+			$label_ja = isset( $row['label_ja'] ) ? mb_substr( sanitize_text_field( (string) $row['label_ja'] ), 0, self::MAX_LABEL_LENGTH ) : '';
+			$label_en = isset( $row['label_en'] ) ? mb_substr( sanitize_text_field( (string) $row['label_en'] ), 0, self::MAX_LABEL_LENGTH ) : '';
+			$order    = isset( $row['order'] ) ? min( 99999, max( 0, absint( $row['order'] ) ) ) : 10;
+
+			$out[ $term_id ] = array(
+				'label_ja' => $label_ja,
+				'label_en' => $label_en,
+				'order'    => $order,
+			);
+			$count++;
+		}
+
+		return $out;
+	}
+
+	/**
+	 * 現在のロケールに応じたカテゴリの表示ラベルを解決する。
+	 *
+	 * @param WP_Term                      $term
+	 * @param string                       $locale
+	 * @param array<int, array<string, mixed>> $ui_options
+	 * @return string
+	 */
+	private static function resolve_category_label( WP_Term $term, $locale = '', array $ui_options = array() ) {
+		if ( empty( $ui_options ) ) {
+			$ui_options = self::category_ui_options();
+		}
+
+		$term_id = (int) $term->term_id;
+		$is_ja   = ( '' !== $locale ) ? ( 0 === strpos( $locale, 'ja' ) ) : ( 'ja' === self::current_lang() );
+
+		if ( isset( $ui_options[ $term_id ] ) ) {
+			$row = $ui_options[ $term_id ];
+			if ( $is_ja && ! empty( $row['label_ja'] ) ) {
+				return $row['label_ja'];
+			}
+			if ( ! $is_ja && ! empty( $row['label_en'] ) ) {
+				return $row['label_en'];
+			}
+		}
+
+		return $term->name;
+	}
+
+	/**
 	 * 保存前のサニタイズ。値の正規化(カテゴリ解決等)はrender()側でまとめて行うため、
 	 * ここでは型・範囲のチェックのみ行う。
 	 */
@@ -678,13 +883,33 @@ final class Mngsk_Recent_Content_List {
 		$out['post_type']        = ! empty( $valid_post_types ) ? implode( ',', $valid_post_types ) : 'post';
 		$out['show_type']        = ! empty( $input['show_type'] ) ? 'yes' : 'no';
 		$out['number']           = (string) min( 50, max( 1, absint( $input['number'] ?? 10 ) ) );
-		$out['pagination']      = ! empty( $input['pagination'] ) ? 'yes' : 'no';
+		$out['pagination']       = ! empty( $input['pagination'] ) ? 'yes' : 'no';
 		$out['pagination_mode']  = ( isset( $input['pagination_mode'] ) && 'async' === $input['pagination_mode'] ) ? 'async' : 'sync';
 		$out['pagination_style'] = in_array( $input['pagination_style'] ?? '', array( 'prev_next', 'load_more' ), true ) ? $input['pagination_style'] : 'numbers';
 		$out['pagination_position'] = in_array( $input['pagination_position'] ?? '', array( 'bottom_right', 'top_right' ), true ) ? $input['pagination_position'] : 'bottom_left';
 		$out['pagination_max_items'] = (string) max( 0, absint( $input['pagination_max_items'] ?? 0 ) );
-		$out['date_from']       = isset( $input['date_from'] ) && preg_match( '/^\d{4}-\d{2}-\d{2}$/', $input['date_from'] ) ? $input['date_from'] : '';
-		$out['date_to']         = isset( $input['date_to'] ) && preg_match( '/^\d{4}-\d{2}-\d{2}$/', $input['date_to'] ) ? $input['date_to'] : '';
+		$out['date_from']        = isset( $input['date_from'] ) && preg_match( '/^\d{4}-\d{2}-\d{2}$/', $input['date_from'] ) ? $input['date_from'] : '';
+		$out['date_to']          = isset( $input['date_to'] ) && preg_match( '/^\d{4}-\d{2}-\d{2}$/', $input['date_to'] ) ? $input['date_to'] : '';
+
+		if ( isset( $input['category_filter'] ) && is_array( $input['category_filter'] ) ) {
+			$filter_slugs = array();
+			foreach ( $input['category_filter'] as $val ) {
+				$filter_slugs[] = sanitize_text_field( (string) $val );
+			}
+			$out['category_filter'] = implode( ',', array_slice( array_filter( $filter_slugs ), 0, self::MAX_LIST_VALUES ) );
+		} else {
+			$out['category_filter'] = isset( $input['category_filter'] ) ? sanitize_text_field( $input['category_filter'] ) : '';
+		}
+
+		$out['category_filter_default'] = isset( $input['category_filter_default'] ) ? sanitize_text_field( $input['category_filter_default'] ) : 'all';
+
+		$style_raw = $input['category_filter_style'] ?? 'links';
+		if ( 'buttons' === $style_raw ) {
+			$style_raw = 'pills'; // 後方互換alias
+		}
+		$out['category_filter_style']   = in_array( $style_raw, array( 'links', 'underline', 'pills', 'select' ), true ) ? $style_raw : 'links';
+		$out['category_filter_all']     = ! empty( $input['category_filter_all'] ) ? 'yes' : 'no';
+
 		$out['orderby']          = ( isset( $input['orderby'] ) && 'modified' === $input['orderby'] ) ? 'modified' : 'date';
 		$out['layout']           = ( isset( $input['layout'] ) && 'inline' === $input['layout'] ) ? 'inline' : 'stacked';
 		$out['category']         = isset( $input['category'] ) ? sanitize_text_field( $input['category'] ) : '';
@@ -789,6 +1014,89 @@ final class Mngsk_Recent_Content_List {
 				}
 				break;
 
+			case 'categories':
+				$checked_cats = self::split_list( $value );
+				$all_cats     = get_categories( array( 'hide_empty' => false ) );
+				$ui_opts      = self::category_ui_options();
+
+				if ( ! empty( $all_cats ) ) {
+					// 保存済みorder順にソート(未設定は10)
+					usort(
+						$all_cats,
+						function ( $a, $b ) use ( $ui_opts ) {
+							$order_a = isset( $ui_opts[ $a->term_id ]['order'] ) ? (int) $ui_opts[ $a->term_id ]['order'] : 10;
+							$order_b = isset( $ui_opts[ $b->term_id ]['order'] ) ? (int) $ui_opts[ $b->term_id ]['order'] : 10;
+							if ( $order_a === $order_b ) {
+								return $a->term_id <=> $b->term_id;
+							}
+							return $order_a <=> $order_b;
+						}
+					);
+
+					echo '<div class="mngsk-recent-content-admin-categories">';
+					echo '<table class="widefat striped mngsk-recent-content-admin-category-table">';
+					echo '<thead><tr>';
+					echo '<th scope="col" class="mngsk-recent-content-admin-col-use">' . esc_html( self::t( 'th_category_use' ) ) . '</th>';
+					echo '<th scope="col" class="mngsk-recent-content-admin-col-name">' . esc_html( self::t( 'th_category_name' ) ) . '</th>';
+					echo '<th scope="col" class="mngsk-recent-content-admin-col-label-ja">' . esc_html( self::t( 'th_label_ja' ) ) . '</th>';
+					echo '<th scope="col" class="mngsk-recent-content-admin-col-label-en">' . esc_html( self::t( 'th_label_en' ) ) . '</th>';
+					echo '<th scope="col" class="mngsk-recent-content-admin-col-order">' . esc_html( self::t( 'th_category_order' ) ) . '</th>';
+					echo '</tr></thead>';
+					echo '<tbody>';
+					$default_order = 10;
+					foreach ( $all_cats as $cat ) {
+						$is_checked = in_array( $cat->slug, $checked_cats, true ) || in_array( (string) $cat->term_id, $checked_cats, true ) || in_array( $cat->name, $checked_cats, true );
+						$label_ja   = $ui_opts[ $cat->term_id ]['label_ja'] ?? '';
+						$label_en   = $ui_opts[ $cat->term_id ]['label_en'] ?? '';
+						$cat_order  = isset( $ui_opts[ $cat->term_id ]['order'] ) ? (int) $ui_opts[ $cat->term_id ]['order'] : $default_order;
+						$default_order += 10;
+
+						printf(
+							'<tr>
+								<td class="mngsk-recent-content-admin-col-use">
+									<input type="checkbox" name="%1$s[]" value="%2$s"%3$s aria-label="%10$s" />
+								</td>
+								<td class="mngsk-recent-content-admin-col-name">
+									<strong class="mngsk-recent-content-admin-category-title">%4$s</strong>
+									<code class="mngsk-recent-content-admin-category-slug">%2$s</code>
+								</td>
+								<td class="mngsk-recent-content-admin-col-label-ja">
+									<input type="text" name="%5$s[%6$d][label_ja]" value="%7$s" placeholder="%4$s" class="mngsk-recent-content-admin-input-text" maxlength="100" aria-label="%11$s" />
+								</td>
+								<td class="mngsk-recent-content-admin-col-label-en">
+									<input type="text" name="%5$s[%6$d][label_en]" value="%8$s" placeholder="%4$s" class="mngsk-recent-content-admin-input-text" maxlength="100" aria-label="%12$s" />
+								</td>
+								<td class="mngsk-recent-content-admin-col-order">
+									<input type="number" name="%5$s[%6$d][order]" value="%9$d" min="0" max="99999" class="mngsk-recent-content-admin-input-order" aria-label="%13$s" />
+								</td>
+							</tr>',
+							esc_attr( $name ),
+							esc_attr( $cat->slug ),
+							checked( $is_checked, true, false ),
+							esc_html( $cat->name ),
+							esc_attr( self::CATEGORY_UI_OPTION ),
+							(int) $cat->term_id,
+							esc_attr( $label_ja ),
+							esc_attr( $label_en ),
+							(int) $cat_order,
+							esc_attr( sprintf( self::t( 'aria_category_use' ), $cat->name ) ),
+							esc_attr( sprintf( self::t( 'aria_label_ja' ), $cat->name ) ),
+							esc_attr( sprintf( self::t( 'aria_label_en' ), $cat->name ) ),
+							esc_attr( sprintf( self::t( 'aria_category_order' ), $cat->name ) )
+						);
+					}
+					echo '</tbody></table>';
+					echo '</div>';
+				} else {
+					printf(
+						'<input type="text" id="%1$s" name="%2$s" value="%3$s" class="regular-text" />',
+						esc_attr( $id ),
+						esc_attr( $name ),
+						esc_attr( $value )
+					);
+				}
+				break;
+
 			case 'number':
 				printf(
 					'<input type="number" id="%1$s" name="%2$s" value="%3$s" min="%4$s" max="%5$s" class="small-text" />',
@@ -873,12 +1181,31 @@ final class Mngsk_Recent_Content_List {
 	 * @param bool        $incremental_load_more Ajaxの「もっと見る」で、当該ページ分だけを返すかどうか。
 	 * @param string      $forced_locale         Ajaxから指定するロケール(空で通常判定)。
 	 * @param string      $base_url              ページネーションの基準URL(Ajax時は元のページURL)。
+	 * @param string|null $forced_category       Ajaxから指定するカテゴリフィルタ値(空・nullで通常判定)。
 	 */
-	private static function render_list( $atts = array(), $forced_page = null, $incremental_load_more = false, $forced_locale = '', $base_url = '' ) {
+	private static function render_list( $atts = array(), $forced_page = null, $incremental_load_more = false, $forced_locale = '', $base_url = '', $forced_category = null ) {
+		$raw_category_filter = $atts['category_filter'] ?? null;
+		$is_filter_explicit  = ( null !== $raw_category_filter && '' !== $raw_category_filter );
 		$atts = shortcode_atts( self::defaults(), $atts, self::SHORTCODE );
 
 		$active_locale   = ( '' !== $forced_locale ) ? $forced_locale : self::current_locale();
 		$request_url     = ( '' !== $base_url ) ? $base_url : self::current_request_url();
+
+		$instance        = self::resolve_instance( $atts['instance'] ?? '' );
+		$page_query_var  = self::page_query_var( $instance );
+		$cat_query_var   = self::category_query_var( $instance );
+
+		$filter_terms    = self::resolve_filter_categories( $atts['category_filter'], $is_filter_explicit );
+		$has_filter      = ! empty( $filter_terms );
+		$requested_cat   = ( null !== $forced_category ) ? $forced_category : self::current_category( $instance );
+		$active_info     = self::resolve_active_category(
+			$filter_terms,
+			$atts['category_filter_default'],
+			$requested_cat,
+			self::is_truthy( $atts['category_filter_all'] ?? 'yes' )
+		);
+		$active_filter_id = $active_info['term_id'];
+		$active_slug      = $active_info['slug'];
 
 		$title_tag       = in_array( $atts['title_tag'], self::ALLOWED_TITLE_TAGS, true ) ? $atts['title_tag'] : 'p';
 		$title_max_len   = max( 0, (int) $atts['title_max_length'] );
@@ -918,7 +1245,7 @@ final class Mngsk_Recent_Content_List {
 		$pagination_position = in_array( $atts['pagination_position'], array( 'bottom_right', 'top_right' ), true ) ? $atts['pagination_position'] : 'bottom_left';
 		$max_items       = max( 0, (int) $atts['pagination_max_items'] );
 		$per_page        = min( 50, max( 1, (int) $atts['number'] ) );
-		$current_page    = $paginate ? ( null !== $forced_page ? max( 1, (int) $forced_page ) : self::current_page() ) : 1;
+		$current_page    = $paginate ? ( null !== $forced_page ? max( 1, (int) $forced_page ) : self::current_page( $instance ) ) : 1;
 
 		$max_pages       = 1;
 		$effective_total = 0;
@@ -926,7 +1253,7 @@ final class Mngsk_Recent_Content_List {
 			// 実際に取得する前に件数だけ数え、current_pageを総ページ数(上限反映後)の範囲に丸める。
 			// これをしないと、load_more(累積取得)で専用URLパラメータを大きくされた場合に
 			// posts_per_page(= per_page * current_page)が際限なく膨らんでしまう。
-			$found_total     = self::count_matching_posts( $atts, $orderby, $active_locale );
+			$found_total     = self::count_matching_posts( $atts, $orderby, $active_locale, $active_filter_id );
 			$effective_total = $found_total;
 			if ( $max_items > 0 ) {
 				$effective_total = min( $effective_total, $max_items );
@@ -947,7 +1274,7 @@ final class Mngsk_Recent_Content_List {
 		$query_per_page = max( 1, $query_per_page );
 		$query_paged    = $is_cumulative ? 1 : $current_page;
 
-		$query = self::query_posts( $atts, $orderby, $query_paged, $query_per_page, $active_locale );
+		$query = self::query_posts( $atts, $orderby, $query_paged, $query_per_page, $active_locale, $active_filter_id );
 		$posts = $query->posts;
 
 		// ページネーションの件数上限(pagination_max_items)が指定されている場合、
@@ -960,16 +1287,21 @@ final class Mngsk_Recent_Content_List {
 		}
 
 		$pagination_html = $paginate
-			? self::render_pagination( $current_page, $max_pages, $pagination_style, $pagination_position, $request_url )
+			? self::render_pagination( $current_page, $max_pages, $pagination_style, $pagination_position, $request_url, $instance, $active_slug )
+			: '';
+
+		$filter_html = $has_filter
+			? self::render_category_filter( $filter_terms, $active_info, $atts, $request_url, $active_locale )
 			: '';
 
 		wp_enqueue_style( self::STYLE_HANDLE );
-		if ( $paginate && 'async' === $pagination_mode ) {
+		$is_async_enabled = ( 'async' === $pagination_mode && ( $paginate || $has_filter ) );
+		if ( $is_async_enabled ) {
 			wp_enqueue_script( self::SCRIPT_HANDLE );
 		}
 
 		$async_attrs = '';
-		if ( $paginate && 'async' === $pagination_mode ) {
+		if ( $is_async_enabled ) {
 			$async_attrs  = ' data-mngsk-recent-content-async="1"';
 			$async_attrs .= ' data-mngsk-recent-content-atts="' . esc_attr( (string) wp_json_encode( $atts ) ) . '"';
 			$async_attrs .= ' data-mngsk-recent-content-locale="' . esc_attr( $active_locale ) . '"';
@@ -978,7 +1310,13 @@ final class Mngsk_Recent_Content_List {
 			// 「次ページの先読み(プリフェッチ)キャッシュ」の起点として使う。
 			$async_attrs .= ' data-mngsk-recent-content-page="' . (int) $current_page . '"';
 			$async_attrs .= ' data-mngsk-recent-content-max-pages="' . (int) $max_pages . '"';
-			if ( 'load_more' === $pagination_style ) {
+			$async_attrs .= ' data-mngsk-recent-content-active-category="' . esc_attr( $active_slug ) . '"';
+			$async_attrs .= ' data-mngsk-recent-content-cat-param="' . esc_attr( $cat_query_var ) . '"';
+			$async_attrs .= ' data-mngsk-recent-content-page-param="' . esc_attr( $page_query_var ) . '"';
+			if ( '' !== $instance ) {
+				$async_attrs .= ' data-mngsk-recent-content-instance="' . esc_attr( $instance ) . '"';
+			}
+			if ( 'load_more' === $pagination_style && $paginate ) {
 				$async_attrs .= ' data-mngsk-recent-content-load-more="1"';
 			}
 		}
@@ -996,6 +1334,9 @@ final class Mngsk_Recent_Content_List {
 		<?php echo $pagination_html; // phpcs:ignore WordPress.Security.EscapeOutput -- render_pagination()内で組み立て時にエスケープ済み ?>
 			<?php endif; ?>
 	</div>
+		<?php endif; ?>
+		<?php if ( '' !== $filter_html ) : ?>
+			<?php echo $filter_html; // phpcs:ignore WordPress.Security.EscapeOutput -- render_category_filter()内で組み立て時にエスケープ済み ?>
 		<?php endif; ?>
 		<?php if ( empty( $posts ) ) : ?>
 			<?php if ( '' !== $atts['empty_text'] ) : ?>
@@ -1070,6 +1411,315 @@ final class Mngsk_Recent_Content_List {
 	}
 
 	/**
+	 * インスタンス名を安全な文字列(英数字、ハイフン、アンダースコア、最大32文字)に正規化する。
+	 *
+	 * @param mixed $instance
+	 * @return string
+	 */
+	private static function resolve_instance( $instance ) {
+		if ( ! is_scalar( $instance ) ) {
+			return '';
+		}
+		$clean = sanitize_key( (string) $instance );
+
+		return substr( $clean, 0, 32 );
+	}
+
+	/**
+	 * ページ番号用のURLクエリ引数名を取得する。
+	 *
+	 * @param string $instance
+	 * @return string
+	 */
+	private static function page_query_var( $instance = '' ) {
+		$inst = self::resolve_instance( $instance );
+		if ( '' !== $inst ) {
+			return 'mngsk_recent_content_' . $inst . '_page';
+		}
+
+		return self::PAGE_QUERY_VAR;
+	}
+
+	/**
+	 * カテゴリフィルタ用のURLクエリ引数名を取得する。
+	 *
+	 * @param string $instance
+	 * @return string
+	 */
+	private static function category_query_var( $instance = '' ) {
+		$inst = self::resolve_instance( $instance );
+		if ( '' !== $inst ) {
+			return 'mngsk_recent_content_' . $inst . '_category';
+		}
+
+		return self::CATEGORY_QUERY_VAR;
+	}
+
+	/**
+	 * category_filter属性の指定から有効なWP_Termオブジェクトのリストを取得する。
+	 *
+	 * @param mixed $value
+	 * @param bool  $is_explicit shortcodeで属性が明示指定されたかどうか
+	 * @return WP_Term[]
+	 */
+	private static function resolve_filter_categories( $value, $is_explicit = false ) {
+		$ids = self::resolve_category_ids( $value );
+		if ( empty( $ids ) ) {
+			return array();
+		}
+
+		$terms = array();
+		foreach ( $ids as $id ) {
+			$term = get_term( $id, 'category' );
+			if ( $term instanceof WP_Term && ! is_wp_error( $term ) ) {
+				$terms[] = $term;
+			}
+		}
+
+		// shortcodeで明示されていない場合(管理画面設定準拠)は、保存済みorder昇順でソート
+		if ( ! $is_explicit && ! empty( $terms ) ) {
+			$ui_opts = self::category_ui_options();
+			usort(
+				$terms,
+				function ( $a, $b ) use ( $ui_opts ) {
+					$order_a = isset( $ui_opts[ $a->term_id ]['order'] ) ? (int) $ui_opts[ $a->term_id ]['order'] : 10;
+					$order_b = isset( $ui_opts[ $b->term_id ]['order'] ) ? (int) $ui_opts[ $b->term_id ]['order'] : 10;
+					if ( $order_a === $order_b ) {
+						return $a->term_id <=> $b->term_id;
+					}
+					return $order_a <=> $order_b;
+				}
+			);
+		}
+
+		return $terms;
+	}
+
+	/**
+	 * 現在のアクティブカテゴリ(スラッグまたは'all')を解決する。
+	 *
+	 * @param WP_Term[]    $filter_terms 許可された候補カテゴリ
+	 * @param string       $default      初期選択 (all または スラッグ/ID/名前)
+	 * @param string|null  $requested    GETまたはAjaxからリクエストされた値
+	 * @param bool         $show_all     「すべて」が有効かどうか
+	 * @return array{slug: string, term_id: int, term: WP_Term|null}
+	 */
+	private static function resolve_active_category( array $filter_terms, $default, $requested = null, $show_all = true ) {
+		if ( empty( $filter_terms ) ) {
+			return array(
+				'slug'    => 'all',
+				'term_id' => 0,
+				'term'    => null,
+			);
+		}
+
+		$term_by_slug = array();
+		$term_by_id   = array();
+		foreach ( $filter_terms as $term ) {
+			$term_by_slug[ $term->slug ] = $term;
+			$term_by_id[ $term->term_id ] = $term;
+		}
+
+		$target = ( null !== $requested && '' !== $requested ) ? (string) $requested : (string) $default;
+		$target = trim( $target );
+
+		// 1. 'all' の判定
+		if ( 'all' === strtolower( $target ) || '' === $target ) {
+			if ( $show_all ) {
+				return array(
+					'slug'    => 'all',
+					'term_id' => 0,
+					'term'    => null,
+				);
+			}
+			$first = reset( $filter_terms );
+			return array(
+				'slug'    => $first->slug,
+				'term_id' => (int) $first->term_id,
+				'term'    => $first,
+			);
+		}
+
+		// 2. スラッグで直接一致
+		if ( isset( $term_by_slug[ $target ] ) ) {
+			$t = $term_by_slug[ $target ];
+			return array(
+				'slug'    => $t->slug,
+				'term_id' => (int) $t->term_id,
+				'term'    => $t,
+			);
+		}
+
+		// 3. sanitize_titleしたスラッグで一致 (日本語スラッグ等)
+		$sanitized = sanitize_title( $target );
+		if ( isset( $term_by_slug[ $sanitized ] ) ) {
+			$t = $term_by_slug[ $sanitized ];
+			return array(
+				'slug'    => $t->slug,
+				'term_id' => (int) $t->term_id,
+				'term'    => $t,
+			);
+		}
+
+		// 4. 数値IDで一致
+		if ( ctype_digit( $target ) && isset( $term_by_id[ (int) $target ] ) ) {
+			$t = $term_by_id[ (int) $target ];
+			return array(
+				'slug'    => $t->slug,
+				'term_id' => (int) $t->term_id,
+				'term'    => $t,
+			);
+		}
+
+		// 5. カテゴリ名で一致
+		foreach ( $filter_terms as $term ) {
+			if ( $term->name === $target ) {
+				return array(
+					'slug'    => $term->slug,
+					'term_id' => (int) $term->term_id,
+					'term'    => $term,
+				);
+			}
+		}
+
+		// リクエスト値が候補に見つからなかった場合、初期設定値で再試行
+		if ( null !== $requested && $default !== $requested ) {
+			return self::resolve_active_category( $filter_terms, $default, null, $show_all );
+		}
+
+		// それでも見つからない場合は 'all' または先頭候補へフォールバック
+		if ( $show_all ) {
+			return array(
+				'slug'    => 'all',
+				'term_id' => 0,
+				'term'    => null,
+			);
+		}
+		$first = reset( $filter_terms );
+		return array(
+			'slug'    => $first->slug,
+			'term_id' => (int) $first->term_id,
+			'term'    => $first,
+		);
+	}
+
+	/**
+	 * カテゴリフィルタUIをレンダリングする。
+	 *
+	 * @param WP_Term[] $filter_terms
+	 * @param array     $active_info
+	 * @param array     $atts
+	 * @param string    $base_url
+	 * @param string    $locale
+	 * @return string
+	 */
+	private static function render_category_filter( array $filter_terms, array $active_info, array $atts, $base_url = '', $locale = '' ) {
+		if ( empty( $filter_terms ) ) {
+			return '';
+		}
+
+		$style_raw = $atts['category_filter_style'] ?? 'links';
+		if ( 'buttons' === $style_raw ) {
+			$style_raw = 'pills'; // 後方互換alias
+		}
+		$style          = in_array( $style_raw, array( 'links', 'underline', 'pills', 'select' ), true ) ? $style_raw : 'links';
+		$show_all       = self::is_truthy( $atts['category_filter_all'] ?? 'yes' );
+		$instance       = self::resolve_instance( $atts['instance'] ?? '' );
+		$cat_query_var  = self::category_query_var( $instance );
+		$page_query_var = self::page_query_var( $instance );
+		$ui_opts        = self::category_ui_options();
+
+		$active_slug = $active_info['slug'];
+
+		$items = array();
+		if ( $show_all ) {
+			$items[] = array(
+				'slug'      => 'all',
+				'safe_slug' => 'all',
+				'name'      => self::t( 'filter_all_text' ),
+			);
+		}
+		foreach ( $filter_terms as $term ) {
+			$safe = sanitize_html_class( $term->slug );
+			if ( '' === $safe ) {
+				$safe = 'term-' . $term->term_id;
+			}
+			$items[] = array(
+				'slug'      => $term->slug,
+				'safe_slug' => $safe,
+				'name'      => self::resolve_category_label( $term, $locale, $ui_opts ),
+			);
+		}
+
+		ob_start();
+		if ( 'select' === $style ) {
+			$form_id = 'mngsk-filter-select-' . ( '' !== $instance ? $instance : 'default' );
+			?>
+<div class="mngsk-recent-content__filters mngsk-recent-content__filters--select" role="group" aria-label="<?php echo esc_attr( self::t( 'label_category_filter' ) ); ?>">
+	<form method="get" action="<?php echo esc_url( $base_url ); ?>" class="mngsk-recent-content__filter-form">
+			<?php
+			$parsed_url = wp_parse_url( $base_url );
+			if ( ! empty( $parsed_url['query'] ) ) {
+				parse_str( $parsed_url['query'], $existing_params );
+				unset( $existing_params[ $cat_query_var ], $existing_params[ $page_query_var ] );
+				foreach ( $existing_params as $param_k => $param_v ) {
+					if ( is_scalar( $param_v ) ) {
+						printf( '<input type="hidden" name="%s" value="%s" />', esc_attr( (string) $param_k ), esc_attr( (string) $param_v ) );
+					}
+				}
+			}
+			?>
+		<label for="<?php echo esc_attr( $form_id ); ?>" class="screen-reader-text"><?php echo esc_html( self::t( 'filter_select_label' ) ); ?></label>
+		<select id="<?php echo esc_attr( $form_id ); ?>" name="<?php echo esc_attr( $cat_query_var ); ?>" class="mngsk-recent-content__filter-select">
+			<?php foreach ( $items as $item ) : ?>
+				<?php
+				$is_selected = ( $item['slug'] === $active_slug );
+				$opt_url     = remove_query_arg( $page_query_var, $base_url );
+				if ( 'all' === $item['slug'] ) {
+					$opt_url = remove_query_arg( $cat_query_var, $opt_url );
+				} else {
+					$opt_url = add_query_arg( $cat_query_var, $item['slug'], $opt_url );
+				}
+				?>
+				<option value="<?php echo esc_attr( $item['slug'] ); ?>" data-url="<?php echo esc_url( $opt_url ); ?>" <?php selected( $is_selected, true ); ?>>
+					<?php echo esc_html( $item['name'] ); ?>
+				</option>
+			<?php endforeach; ?>
+		</select>
+		<button type="submit" class="mngsk-recent-content__filter-submit"><?php echo esc_html( self::t( 'filter_select_submit' ) ); ?></button>
+	</form>
+</div>
+			<?php
+		} else {
+			$container_class = 'mngsk-recent-content__filters mngsk-recent-content__filters--' . $style;
+			?>
+<nav class="<?php echo esc_attr( $container_class ); ?>" aria-label="<?php echo esc_attr( self::t( 'label_category_filter' ) ); ?>">
+			<?php foreach ( $items as $item ) : ?>
+				<?php
+				$is_active    = ( $item['slug'] === $active_slug );
+				$filter_url   = remove_query_arg( $page_query_var, $base_url );
+				if ( 'all' === $item['slug'] ) {
+					$filter_url = remove_query_arg( $cat_query_var, $filter_url );
+				} else {
+					$filter_url = add_query_arg( $cat_query_var, $item['slug'], $filter_url );
+				}
+				$link_classes = 'mngsk-recent-content__filter mngsk-recent-content__filter--category-' . $item['safe_slug'];
+				if ( $is_active ) {
+					$link_classes .= ' mngsk-recent-content__filter--active';
+				}
+				?>
+	<a class="<?php echo esc_attr( $link_classes ); ?>" href="<?php echo esc_url( $filter_url ); ?>" data-category="<?php echo esc_attr( $item['slug'] ); ?>"<?php echo $is_active ? ' aria-current="true"' : ''; ?>>
+		<?php echo esc_html( $item['name'] ); ?>
+	</a>
+			<?php endforeach; ?>
+</nav>
+			<?php
+		}
+
+		return (string) ob_get_clean();
+	}
+
+	/**
 	 * 表示対象の投稿を取得する。
 	 *
 	 * 旧プラグインはget_posts()(suppress_filters既定true)を使っていたため
@@ -1078,8 +1728,8 @@ final class Mngsk_Recent_Content_List {
 	 *
 	 * @return WP_Query
 	 */
-	private static function query_posts( array $atts, $orderby, $paged, $posts_per_page, $locale = '' ) {
-		$args = self::build_query_args( $atts, $orderby, $locale );
+	private static function query_posts( array $atts, $orderby, $paged, $posts_per_page, $locale = '', $active_filter_term_id = 0 ) {
+		$args = self::build_query_args( $atts, $orderby, $locale, $active_filter_term_id );
 
 		$args['posts_per_page'] = max( 1, (int) $posts_per_page );
 		$args['paged']          = max( 1, (int) $paged );
@@ -1097,8 +1747,8 @@ final class Mngsk_Recent_Content_List {
 	 *
 	 * @return int
 	 */
-	private static function count_matching_posts( array $atts, $orderby, $locale = '' ) {
-		$args                   = self::build_query_args( $atts, $orderby, $locale );
+	private static function count_matching_posts( array $atts, $orderby, $locale = '', $active_filter_term_id = 0 ) {
+		$args                   = self::build_query_args( $atts, $orderby, $locale, $active_filter_term_id );
 		$args['posts_per_page'] = 1;
 		$args['paged']          = 1;
 		$args['no_found_rows']  = false;
@@ -1115,7 +1765,7 @@ final class Mngsk_Recent_Content_List {
 	 * query_posts()/count_matching_posts()で共有する、投稿タイプ・カテゴリ・除外・期間などの
 	 * 絞り込み条件(posts_per_page/paged/no_found_rows以外)を組み立てる。
 	 */
-	private static function build_query_args( array $atts, $orderby, $locale = '' ) {
+	private static function build_query_args( array $atts, $orderby, $locale = '', $active_filter_term_id = 0 ) {
 		$args = array(
 			'post_type'           => self::parse_post_types( $atts['post_type'] ),
 			'post_status'         => 'publish',
@@ -1171,6 +1821,16 @@ final class Mngsk_Recent_Content_List {
 			);
 		}
 
+		if ( $active_filter_term_id > 0 ) {
+			$tax_query[] = array(
+				'taxonomy'         => 'category',
+				'field'            => 'term_id',
+				'terms'            => array( (int) $active_filter_term_id ),
+				'operator'         => 'IN',
+				'include_children' => true,
+			);
+		}
+
 		$exclude = self::resolve_category_ids( $atts['exclude_category'] );
 		if ( ! empty( $exclude ) ) {
 			$tax_query[] = array(
@@ -1199,31 +1859,57 @@ final class Mngsk_Recent_Content_List {
 	}
 
 	/**
-	 * ページネーション用の現在ページ番号($_GET[self::PAGE_QUERY_VAR])。1未満は1に丸める。
+	 * ページネーション用の現在ページ番号。1未満は1に丸める。
+	 *
+	 * @param string $instance
+	 * @return int
 	 */
-	private static function current_page() {
-		$page = isset( $_GET[ self::PAGE_QUERY_VAR ] ) ? absint( wp_unslash( $_GET[ self::PAGE_QUERY_VAR ] ) ) : 1; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- ページ送りの読み取りのみで状態変更を伴わない
+	private static function current_page( $instance = '' ) {
+		$var = self::page_query_var( $instance );
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- 状態変更を伴わない公開ページ送り表示の読み取り
+		if ( isset( $_GET[ $var ] ) && ( is_numeric( $_GET[ $var ] ) || is_string( $_GET[ $var ] ) ) ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- 状態変更を伴わない公開ページ送り表示の読み取り
+			return max( 1, absint( wp_unslash( $_GET[ $var ] ) ) );
+		}
 
-		return max( 1, $page );
+		return 1;
+	}
+
+	/**
+	 * カテゴリフィルタ用の現在リクエスト値を取得する。
+	 *
+	 * @param string $instance
+	 * @return string|null
+	 */
+	private static function current_category( $instance = '' ) {
+		$var = self::category_query_var( $instance );
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- 状態変更を伴わない公開カテゴリフィルタ表示の読み取り
+		if ( isset( $_GET[ $var ] ) && is_string( $_GET[ $var ] ) ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- 状態変更を伴わない公開カテゴリフィルタ表示の読み取り
+			$cat = sanitize_text_field( wp_unslash( $_GET[ $var ] ) );
+			return '' !== $cat ? $cat : null;
+		}
+
+		return null;
 	}
 
 	/**
 	 * ページネーションのリンク一覧をHTMLで返す(1ページしかない場合は空文字)。
 	 */
-	private static function render_pagination( $current_page, $max_pages, $style = 'numbers', $position = 'bottom_left', $base_url = '' ) {
+	private static function render_pagination( $current_page, $max_pages, $style = 'numbers', $position = 'bottom_left', $base_url = '', $instance = '', $active_category_slug = 'all' ) {
 		$max_pages = (int) $max_pages;
 		if ( $max_pages <= 1 ) {
 			return '';
 		}
 
 		if ( 'load_more' === $style ) {
-			$inner       = self::pagination_inner_load_more( $current_page, $max_pages, $base_url );
+			$inner       = self::pagination_inner_load_more( $current_page, $max_pages, $base_url, $instance, $active_category_slug );
 			$style_class = 'mngsk-recent-content__pagination--load-more';
 		} elseif ( 'prev_next' === $style ) {
-			$inner       = self::pagination_inner_prev_next( $current_page, $max_pages, $base_url );
+			$inner       = self::pagination_inner_prev_next( $current_page, $max_pages, $base_url, $instance, $active_category_slug );
 			$style_class = 'mngsk-recent-content__pagination--prev-next';
 		} else {
-			$inner       = self::pagination_inner_numbers( $current_page, $max_pages, $base_url );
+			$inner       = self::pagination_inner_numbers( $current_page, $max_pages, $base_url, $instance, $active_category_slug );
 			$style_class = 'mngsk-recent-content__pagination--numbers';
 		}
 
@@ -1237,12 +1923,28 @@ final class Mngsk_Recent_Content_List {
 	}
 
 	/**
+	 * ページネーションリンク用のURLベースを組み立てる(active categoryを維持)。
+	 */
+	private static function pagination_base_url( $base_url, $instance, $active_category_slug ) {
+		$url      = ( '' !== $base_url ) ? $base_url : self::current_request_url();
+		$cat_var  = self::category_query_var( $instance );
+
+		if ( 'all' !== $active_category_slug && '' !== $active_category_slug ) {
+			$url = add_query_arg( $cat_var, $active_category_slug, $url );
+		} else {
+			$url = remove_query_arg( $cat_var, $url );
+		}
+
+		return $url;
+	}
+
+	/**
 	 * スタイル「番号付き」: paginate_links()による通常のページ番号一覧(<nav>の中身のみ)。
 	 */
-	private static function pagination_inner_numbers( $current_page, $max_pages, $base_url = '' ) {
-		$base = ( '' !== $base_url )
-			? add_query_arg( self::PAGE_QUERY_VAR, '%#%', $base_url )
-			: add_query_arg( self::PAGE_QUERY_VAR, '%#%' );
+	private static function pagination_inner_numbers( $current_page, $max_pages, $base_url = '', $instance = '', $active_category_slug = 'all' ) {
+		$target_url = self::pagination_base_url( $base_url, $instance, $active_category_slug );
+		$page_var   = self::page_query_var( $instance );
+		$base       = add_query_arg( $page_var, '%#%', $target_url );
 
 		return (string) paginate_links(
 			array(
@@ -1260,19 +1962,17 @@ final class Mngsk_Recent_Content_List {
 	/**
 	 * スタイル「前へ/次へのみ」: 番号を出さず、前後のリンクだけを出す(<nav>の中身のみ)。
 	 */
-	private static function pagination_inner_prev_next( $current_page, $max_pages, $base_url = '' ) {
-		$parts = array();
+	private static function pagination_inner_prev_next( $current_page, $max_pages, $base_url = '', $instance = '', $active_category_slug = 'all' ) {
+		$target_url = self::pagination_base_url( $base_url, $instance, $active_category_slug );
+		$page_var   = self::page_query_var( $instance );
+		$parts      = array();
 
 		if ( $current_page > 1 ) {
-			$prev_url = ( '' !== $base_url )
-				? add_query_arg( self::PAGE_QUERY_VAR, $current_page - 1, $base_url )
-				: add_query_arg( self::PAGE_QUERY_VAR, $current_page - 1 );
+			$prev_url = add_query_arg( $page_var, $current_page - 1, $target_url );
 			$parts[]  = '<a class="whatsnew-prev" href="' . esc_url( $prev_url ) . '">' . esc_html( self::t( 'pagination_prev' ) ) . '</a>';
 		}
 		if ( $current_page < $max_pages ) {
-			$next_url = ( '' !== $base_url )
-				? add_query_arg( self::PAGE_QUERY_VAR, $current_page + 1, $base_url )
-				: add_query_arg( self::PAGE_QUERY_VAR, $current_page + 1 );
+			$next_url = add_query_arg( $page_var, $current_page + 1, $target_url );
 			$parts[]  = '<a class="whatsnew-next" href="' . esc_url( $next_url ) . '">' . esc_html( self::t( 'pagination_next' ) ) . '</a>';
 		}
 
@@ -1283,14 +1983,14 @@ final class Mngsk_Recent_Content_List {
 	 * スタイル「もっと見るボタン」: 次ページへのリンクを1つだけ出す(最終ページでは空文字、<nav>の中身のみ)。
 	 * render()側で、このスタイルの場合はページ内容自体が累積取得になっている点に注意。
 	 */
-	private static function pagination_inner_load_more( $current_page, $max_pages, $base_url = '' ) {
+	private static function pagination_inner_load_more( $current_page, $max_pages, $base_url = '', $instance = '', $active_category_slug = 'all' ) {
 		if ( $current_page >= $max_pages ) {
 			return '';
 		}
 
-		$next_url = ( '' !== $base_url )
-			? add_query_arg( self::PAGE_QUERY_VAR, $current_page + 1, $base_url )
-			: add_query_arg( self::PAGE_QUERY_VAR, $current_page + 1 );
+		$target_url = self::pagination_base_url( $base_url, $instance, $active_category_slug );
+		$page_var   = self::page_query_var( $instance );
+		$next_url   = add_query_arg( $page_var, $current_page + 1, $target_url );
 
 		return '<a class="mngsk-recent-content__load-more" href="' . esc_url( $next_url ) . '">' . esc_html( self::t( 'load_more_text' ) ) . '</a>';
 	}
